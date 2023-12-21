@@ -1,0 +1,10 @@
+syntax="proto3";
+
+package teksteamclient.cm.messages.bodies;
+option csharp_namespace = "TEKSteamClient.CM.Messages.Bodies";
+
+message Multi
+{
+	optional int32 uncompressed_size = 1;
+	optional bytes inner_messages = 2;
+}

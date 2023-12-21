@@ -1,0 +1,16 @@
+syntax="proto3";
+
+package teksteamclient.cm.messages.bodies;
+option csharp_namespace = "TEKSteamClient.CM.Messages.Bodies";
+
+message LogOn
+{
+	uint32 protocol_version = 1;
+	uint32 cell_id = 3;
+	string client_language = 6;
+	int32 client_os_type = 7;
+	optional string account_name = 50;
+	optional string password = 51;
+	optional string auth_code = 84;
+	optional string steam_guard_code = 101;
+}

@@ -1,0 +1,30 @@
+syntax="proto3";
+
+package teksteamclient.manifest;
+option csharp_namespace = "TEKSteamClient.Manifest";
+
+message Payload
+{
+	message File
+	{
+		enum FileFlag
+		{
+			NONE = 0;
+			DIRECTORY = 64;
+		}
+		message Chunk
+		{
+			bytes gid = 1;
+			fixed32 checksum = 2;
+			int64 offset = 3;
+			int32 uncompressed_size = 4;
+			int32 compressed_size = 5;
+		}
+		string name = 1;
+		int64 size = 2;
+		FileFlag flags = 3;
+		repeated Chunk chunks = 6;
+		optional string link_target = 7;
+	}
+	repeated File files = 1;
+}

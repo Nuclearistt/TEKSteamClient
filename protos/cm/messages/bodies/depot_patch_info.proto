@@ -1,0 +1,12 @@
+syntax="proto3";
+
+package teksteamclient.cm.messages.bodies;
+option csharp_namespace = "TEKSteamClient.CM.Messages.Bodies";
+
+message DepotPatchInfo
+{
+	uint32 app_id = 1;
+	uint32 depot_id = 2;
+	uint64 source_manifest_id = 3;
+	uint64 target_manifest_id = 4;
+}

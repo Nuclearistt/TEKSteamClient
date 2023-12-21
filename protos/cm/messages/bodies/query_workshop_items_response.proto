@@ -1,0 +1,19 @@
+syntax="proto3";
+
+package teksteamclient.cm.messages.bodies;
+option csharp_namespace = "TEKSteamClient.CM.Messages.Bodies";
+
+message QueryWorkshopItemsResponse
+{
+	message Item
+	{
+		optional int32 result = 1;
+		optional uint64 id = 2;
+		optional string preview_url = 11;
+		optional fixed64 manifest_id = 14;
+		optional string name = 16;
+		optional int64 last_updated = 20;
+	}
+	uint32 total = 1;
+	repeated Item items = 2;
+}

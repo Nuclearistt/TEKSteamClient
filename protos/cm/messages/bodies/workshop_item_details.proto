@@ -1,0 +1,10 @@
+syntax="proto3";
+
+package teksteamclient.cm.messages.bodies;
+option csharp_namespace = "TEKSteamClient.CM.Messages.Bodies";
+
+message WorkshopItemDetails
+{
+	repeated fixed64 ids = 1;
+	bool include_metadata = 11;
+}

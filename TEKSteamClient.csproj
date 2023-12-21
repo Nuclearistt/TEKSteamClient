@@ -1,0 +1,53 @@
+<Project Sdk="Microsoft.NET.Sdk">
+	<PropertyGroup>
+		<TargetFramework>net8.0</TargetFramework>
+		<Version>1.0.0</Version>
+		<Authors>Nuclearist</Authors>
+		<Product>TEK Steam Client library</Product>
+		<Title>TEK Steam Client</Title>
+		<Copyright>Copyright © 2023 Nuclearist</Copyright>
+		<PackageLicenseExpression>MIT</PackageLicenseExpression>
+		<PackageReadmeFile>README.md</PackageReadmeFile>
+		<PackageTags>steam;tek</PackageTags>
+		<Description>Fast Steam Client implementation that allows downloading, updating and validating any app when provided depot decryption keys and manifest request code sources</Description>
+		<ProjectUrl>https://github.com/Nuclearistt/TEKSteamClient</ProjectUrl>
+		<RepositoryUrl>https://github.com/Nuclearistt/TEKSteamClient.git</RepositoryUrl>
+		<RepositoryType>git</RepositoryType>
+		<IncludeSource>True</IncludeSource>
+		<AppendTargetFrameworkToOutputPath>False</AppendTargetFrameworkToOutputPath>
+		<ImplicitUsings>Enable</ImplicitUsings>
+		<Nullable>Enable</Nullable>
+		<AllowUnsafeBlocks>True</AllowUnsafeBlocks>
+		<JsonSerializerIsReflectionEnabledByDefault>False</JsonSerializerIsReflectionEnabledByDefault>
+		<IsAotCompatible>True</IsAotCompatible>
+	</PropertyGroup>
+	<PropertyGroup Condition="'$(Configuration)' == 'Release'">
+		<Optimize>True</Optimize>
+		<SignAssembly Condition="Exists('SigningKey.snk')">True</SignAssembly>
+		<AssemblyOriginatorKeyFile>SigningKey.snk</AssemblyOriginatorKeyFile>
+		<DelaySign>False</DelaySign>
+	</PropertyGroup>
+	<PropertyGroup>
+		<ProtoPlatform Condition="$([MSBuild]::IsOSPlatform('Windows'))">windows</ProtoPlatform>
+		<ProtoPlatform Condition="$([MSBuild]::IsOSPlatform('Linux'))">linux</ProtoPlatform>
+		<ProtoPlatform Condition="$([MSBuild]::IsOSPlatform('OSX'))">macosx</ProtoPlatform>
+		<ProtoPlatformBitness>x86</ProtoPlatformBitness>
+		<ProtoPlatformBitness Condition="$([System.Environment]::Is64BitOperatingSystem)">x64</ProtoPlatformBitness>
+		<ProtoExe>protoc</ProtoExe>
+		<ProtoExe Condition="$([MSBuild]::IsOSPlatform('Windows'))">protoc.exe</ProtoExe>
+	</PropertyGroup>
+	<ItemGroup>
+		<PackageReference Include="System.IO.Hashing" Version="8.0.0"/>
+		<PackageReference Include="Google.Protobuf" Version="3.25.1"/>
+		<PackageReference Include="Google.Protobuf.Tools" Version="3.25.1"/>
+	</ItemGroup>
+	<ItemGroup>
+		<None Include="README.md" Pack="True" PackagePath="\"/>
+	</ItemGroup>
+	<ItemGroup>
+		<Protos Include="protos\**"/>
+	</ItemGroup>
+	<Target Name="PreBuild" BeforeTargets="PreBuildEvent">
+		<Exec Command="&quot;$([System.IO.Path]::Combine('$(PkgGoogle_Protobuf_Tools)', 'tools', '$(ProtoPlatform)_$(ProtoPlatformBitness)', '$(ProtoExe)'))&quot; &quot;--proto_path=$(ProjectDir)protos&quot; &quot;--csharp_out=$(ProjectDir)src&quot; --csharp_opt=file_extension=.g.cs,base_namespace=TEKSteamClient,internal_access &quot;$([System.IO.Path]::GetFullPath(%(Protos.Identity)))&quot;"/>
+	</Target>
+</Project>

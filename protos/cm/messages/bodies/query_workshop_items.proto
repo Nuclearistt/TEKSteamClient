@@ -1,0 +1,13 @@
+syntax="proto3";
+
+package teksteamclient.cm.messages.bodies;
+option csharp_namespace = "TEKSteamClient.CM.Messages.Bodies";
+
+message QueryWorkshopItems
+{
+	uint32 page = 2;
+	uint32 items_per_page = 3;
+	uint32 app_id = 5;
+	optional string search_text = 11;
+	bool return_metadata = 32;
+}

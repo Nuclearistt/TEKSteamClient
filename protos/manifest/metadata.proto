@@ -1,0 +1,12 @@
+syntax="proto3";
+
+package teksteamclient.manifest;
+option csharp_namespace = "TEKSteamClient.Manifest";
+
+message Metadata
+{
+	uint64 id = 2;
+	bool filenames_encrypted = 4;
+	uint64 uncompressed_size = 5;
+	uint64 compressed_size = 6;
+}
