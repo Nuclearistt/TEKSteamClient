@@ -43,6 +43,9 @@ public class AppManager
 			if (!Directory.Exists(CdnClient.ManifestsDirectory))
 				Directory.CreateDirectory(CdnClient.ManifestsDirectory);
 		}
+		var attributes = File.GetAttributes(_scDataPath);
+		if ((attributes & FileAttributes.ReadOnly) is not FileAttributes.None)
+			File.SetAttributes(_scDataPath, attributes & ~FileAttributes.ReadOnly);
 	}
 	/// <summary>Path to SCData directory.</summary>
 	private readonly string _scDataPath;
