@@ -32,4 +32,4 @@ bool alreadyUpToDate = appManager.Update(new(346111), CancellationToken.None); /
 
 ## License
 
-TEK Steam Client is licensed under the [MIT](LICENSE) license.
+TEK Steam Client is licensed under the [MIT](https://github.com/Nuclearistt/TEKSteamClient/blob/main/LICENSE) license.
