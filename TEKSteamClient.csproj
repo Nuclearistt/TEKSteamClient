@@ -54,10 +54,10 @@
 	<ItemGroup>
 		<Protos Include="protos/**"/>
 	</ItemGroup>
-	<ItemGroup>
-		<Compile Include="src/**" Condition="$([System.String]::Copy('%(Identity)').EndsWith('.g.cs'))" KeepDuplicates="False"/>
-	</ItemGroup>
 	<Target Name="CompileProto" BeforeTargets="BeforeCompile">
 		<Exec Command="&quot;$([System.IO.Path]::Combine('$(PkgGoogle_Protobuf_Tools)', 'tools', '$(ProtoPlatform)_$(ProtoPlatformBitness)', '$(ProtoExe)'))&quot; &quot;--proto_path=$(ProjectDir)protos&quot; &quot;--csharp_out=$(ProjectDir)src&quot; --csharp_opt=file_extension=.g.cs,base_namespace=TEKSteamClient,internal_access &quot;$([System.IO.Path]::GetFullPath(%(Protos.Identity)))&quot;"/>
+		<ItemGroup>
+			<Compile Include="src/**" KeepDuplicates="False"/>
+		</ItemGroup>
 	</Target>
 </Project>
