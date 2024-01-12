@@ -14,16 +14,20 @@ public readonly struct SHA1Hash : IComparable<SHA1Hash>, IEquatable<SHA1Hash>
 	public SHA1Hash(ReadOnlySpan<byte> data) => Unsafe.CopyBlock(ref Unsafe.As<SHA1Hash, byte>(ref this), ref MemoryMarshal.GetReference(data), 20);
 	private readonly Vector128<ulong> _f1;
 	private readonly uint _f2;
+	///<inheritdoc/>
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public bool Equals(SHA1Hash other) => _f2 == other._f2 && _f1 == other._f1;
+	///<inheritdoc/>
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public int CompareTo(SHA1Hash other)
 	{
 		int res = _f2.CompareTo(other._f2);
 		return res is 0 ? _f1 == other._f1 ? 0 : Vector128.LessThan(_f1, other._f1) == default ? 1 : -1 : res;
 	}
+	///<inheritdoc/>
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public override bool Equals(object? obj) => obj is SHA1Hash hash && this == hash;
+	///<inheritdoc/>
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public override int GetHashCode()
 	{
@@ -32,6 +36,7 @@ public readonly struct SHA1Hash : IComparable<SHA1Hash>, IEquatable<SHA1Hash>
 		hashCode.Add(_f2);
 		return hashCode.ToHashCode();
 	}
+	///<inheritdoc/>
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public override string ToString() => Convert.ToHexString(MemoryMarshal.CreateReadOnlySpan(ref Unsafe.As<SHA1Hash, byte>(ref Unsafe.AsRef(in this)), 20));
 	/// <summary>Compares two hashes to determine if they are equal.</summary>

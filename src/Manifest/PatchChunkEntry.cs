@@ -11,6 +11,7 @@ public readonly struct PatchChunkEntry : IComparable<PatchChunkEntry>
 	public required int TargetChunkIndex { get; init; }
 	/// <summary>Patch data.</summary>
 	public required ReadOnlyMemory<byte> Data { get; init; }
+	/// <inheritdoc/>
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public int CompareTo(PatchChunkEntry other) => TargetChunkIndex.CompareTo(other.TargetChunkIndex);
 }

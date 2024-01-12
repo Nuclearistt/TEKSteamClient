@@ -71,6 +71,7 @@ public partial class CMClient
 			_ => -1,
 		};
 	}
+	/// <summary>Creates a new CM client.</summary>
 	public CMClient() => _connection = new(() => Disconnected?.Invoke());
 	/// <summary>Connection that is used to communicate with Steam CM server.</summary>
 	private readonly WebSocketConnection _connection;

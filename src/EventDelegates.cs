@@ -32,7 +32,10 @@ public enum ProgressType
 /// <summary>Indicates the category of files being counted.</summary>
 public enum ValidationCounterType
 {
+	/// <summary>File exists and its chunks' checksums match those listed in the manifest.</summary>
 	Matching,
+	/// <summary>File exists but checksums of one or more of its chunks mimatch those listed in the manifest.</summary>
 	Mismatching,
+	/// <summary>File doesn't exist.</summary>
 	Missing
 }

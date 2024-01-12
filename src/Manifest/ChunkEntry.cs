@@ -16,6 +16,7 @@ public readonly struct ChunkEntry : IComparable<ChunkEntry>
 	public required int UncompressedSize { get; init; }
 	/// <summary>Adler checksum of chunk data.</summary>
 	public required uint Checksum { get; init; }
+	/// <inheritdoc/>
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public int CompareTo(ChunkEntry other) => Gid.CompareTo(other.Gid);
 }

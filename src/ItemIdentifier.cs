@@ -35,6 +35,7 @@ public class ItemIdentifier
 	public uint DepotId { get; }
 	/// <summary>Workshop item ID of the item.</summary>
 	public ulong WorkshopItemId { get; }
+	/// <inheritdoc/>
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public override string ToString() => WorkshopItemId is 0 ? DepotId.ToString() : string.Concat(DepotId.ToString(), ".", WorkshopItemId.ToString());
 }

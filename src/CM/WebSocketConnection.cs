@@ -301,7 +301,8 @@ internal class WebSocketConnection
 			_thread?.Join();
 	}
 	/// <summary>Sends a message to CM server and returns its response if there is any.</summary>
-	/// <typeparam name="T">Type of expected response message body.</typeparam>
+	/// <typeparam name="TRequest">Type of request message body.</typeparam>
+	/// <typeparam name="TResponse">Type of expected response message body.</typeparam>
 	/// <param name="message">Message to send.</param>
 	/// <param name="expectedResponseType">Type of expected response message.</param>
 	/// <param name="expectedTargetJobId">Target Job ID of expected response message.</param>

@@ -19,7 +19,7 @@ public class ItemState
 			return;
 		}
 		byte[] buffer;
-		using var fileHandle = File.OpenHandle(filePath);
+		using (var fileHandle = File.OpenHandle(filePath))
 		{
 			buffer = new byte[(int)RandomAccess.GetLength(fileHandle)];
 			RandomAccess.Read(fileHandle, buffer, 0);
@@ -68,14 +68,23 @@ public class ItemState
 	/// <summary>Describes status of an item.</summary>
 	public enum ItemStatus
 	{
+		/// <summary>Item is corrupted and should be validated ASAP.</summary>
 		Corrupted,
+		/// <summary>Item is installed and up to date.</summary>
 		Installed,
+		/// <summary>Item update is available.</summary>
 		UpdateAvailable,
+		/// <summary>Item installation is being validated.</summary>
 		Validating,
+		/// <summary>Item's download cache is being preallocated.</summary>
 		Preallocating,
+		/// <summary>Item files are downloading.</summary>
 		Downloading,
+		/// <summary>Item is being patched.</summary>
 		Patching,
+		/// <summary>New data for item is being written to its installation.</summary>
 		WritingNewData,
+		/// <summary>Item's old files are being removed.</summary>
 		RemovingOldFiles
 	}
 }
