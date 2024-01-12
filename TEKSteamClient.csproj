@@ -22,6 +22,9 @@
 		<JsonSerializerIsReflectionEnabledByDefault>False</JsonSerializerIsReflectionEnabledByDefault>
 		<IsAotCompatible>True</IsAotCompatible>
 	</PropertyGroup>
+	<PropertyGroup Condition="'$(Configuration)' == 'Debug' And Exists('Debug.cs')">
+		<OutputType>Exe</OutputType>
+	</PropertyGroup>
 	<PropertyGroup Condition="'$(Configuration)' == 'Release'">
 		<Optimize>True</Optimize>
 		<SignAssembly Condition="Exists('SigningKey.snk')">True</SignAssembly>

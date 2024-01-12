@@ -3,3 +3,4 @@ bin/
 obj/
 *.snk
 *.g.cs
+Debug.cs
