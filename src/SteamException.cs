@@ -37,6 +37,8 @@ public class SteamException : Exception
 		CMFailedToGetManifestRequestCode,
 		/// <summary>[CM Client] Failed to get depot patch availability.</summary>
 		CMFailedToGetPatchAvailablity,
+		/// <summary>[CM Client] Failed to get PICS access token for app.</summary>
+		CMFailedToGetPicsAccessToken,
 		/// <summary>[CM Client] Failed to get workshop item details.</summary>
 		CMFailedToGetWorkshopItemDetails,
 		/// <summary>[CM Client] Log on failed.</summary>

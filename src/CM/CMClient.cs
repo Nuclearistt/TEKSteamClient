@@ -77,6 +77,13 @@ public partial class CMClient
 	private readonly WebSocketConnection _connection;
 	/// <summary>OS type value included into logon messages.</summary>
 	private static readonly int s_osType;
+	/// <summary>HTTP client that downloads PICS app info.</summary>
+	private static readonly HttpClient s_clientConfigClient = new()
+	{
+		BaseAddress = new("http://clientconfig.akamai.steamstatic.com/appinfo/"),
+		DefaultRequestVersion = HttpVersion.Version20,
+		Timeout = TimeSpan.FromSeconds(10)
+	};
 	/// <summary>When <see langword="true"/>, ensures that the client is connected and logged on before every request and logs on with anonymous user credentials if it's not.</summary>
 	public bool EnsureLogOn { get; set; }
 	/// <summary>Steam cell ID used in certain requests.</summary>
@@ -301,11 +308,38 @@ public partial class CMClient
 		message.Body.Apps.Add(new ProductInfo.Types.AppInfo { AppId = appId, AccessToken = 0 });
 		message.Body.MetadataOnly = false;
 		var response = _connection.TransceiveMessage<ProductInfo, ProductInfoResponse>(message, MessageType.ProductInfoResponse, jobId);
-		if (response is null || response.Body.Apps.Count is 0 || !MemoryMarshal.TryGetArray(response.Body.Apps[0].Buffer.Memory, out var segment))
+		if (response is null || response.Body.Apps.Count is 0)
 			throw new SteamException(SteamException.ErrorType.CMFailedToGetManifestIds);
+		if (response.Body.Apps[0].MissingToken)
+		{
+			jobId = GlobalId.NextJobId;
+			var tokenMessage = new Message<PicsAccessToken>(MessageType.PicsAccessToken) { Header = new() { SourceJobId = jobId } };
+			tokenMessage.Body.AppIds.Add(appId);
+			var tokenResponse = _connection.TransceiveMessage<PicsAccessToken, PicsAccessTokenResponse>(tokenMessage, MessageType.PicsAccessTokenResponse, jobId);
+			if (tokenResponse is null || tokenResponse.Body.Apps.Count is 0)
+				throw new SteamException(SteamException.ErrorType.CMFailedToGetPicsAccessToken);
+			jobId = GlobalId.NextJobId;
+			message.Header.SourceJobId = jobId;
+			message.Body.Apps[0].AccessToken = tokenResponse.Body.Apps[0].Token;
+			response = _connection.TransceiveMessage<ProductInfo, ProductInfoResponse>(message, MessageType.ProductInfoResponse, jobId);
+			if (response is null || response.Body.Apps.Count is 0)
+				throw new SteamException(SteamException.ErrorType.CMFailedToGetManifestIds);
+		}
+		var appInfo = response.Body.Apps[0];
 		List<VDFEntry>? entries;
-		using (var reader = new StreamReader(new MemoryStream(segment.Array!, false)))
-			entries = new VDFEntry(reader)["depots"]?.Children;
+		if (MemoryMarshal.TryGetArray(appInfo.Buffer.Memory, out var segment))
+			using (var reader = new StreamReader(new MemoryStream(segment.Array!, false)))
+				entries = new VDFEntry(reader)["depots"]?.Children;
+		else
+			try
+			{
+				var httpRequest = new HttpRequestMessage(HttpMethod.Get, new Uri($"{appId}/sha/{Convert.ToHexString(appInfo.Sha.Span)}.txt.gz")) { Version = HttpVersion.Version20 };
+				using var httpResponse = s_clientConfigClient.SendAsync(httpRequest, HttpCompletionOption.ResponseContentRead, CancellationToken.None).Result.EnsureSuccessStatusCode();
+				using var content = httpResponse.Content;
+				using var reader = new StreamReader(content.ReadAsStream());
+				entries = new VDFEntry(reader)["depots"]?.Children;
+			}
+			catch (HttpRequestException e) { throw new SteamException(SteamException.ErrorType.CMFailedToGetManifestIds, e); }
 		if (entries is null)
 			return FrozenDictionary<uint, ulong>.Empty;
 		entries.RemoveAll(e => !uint.TryParse(e.Key, out _) || e["manifests"]?["public"] is null);

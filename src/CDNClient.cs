@@ -1,5 +1,4 @@
-﻿using System.Collections.Frozen;
-using System.IO.Hashing;
+﻿using System.IO.Hashing;
 using System.Net;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
