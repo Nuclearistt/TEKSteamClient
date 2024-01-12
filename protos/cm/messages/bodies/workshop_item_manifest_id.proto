@@ -12,3 +12,12 @@ message WorkshopItemManifestId
 	uint32 app_id = 1;
 	repeated Item items = 3;
 }
+message WorkshopItemManifestIdResponse
+{
+	message Item
+	{
+		fixed64 id = 1;
+		optional fixed64 manifest_id = 3;
+	}
+	repeated Item items = 2;
+}

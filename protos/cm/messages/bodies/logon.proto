@@ -14,3 +14,9 @@ message LogOn
 	optional string auth_code = 84;
 	optional string steam_guard_code = 101;
 }
+message LogOnResponse
+{
+	optional int32 result = 1;
+	optional int32 heartbeat_interval = 2;
+	optional uint32 cell_id = 7;
+}

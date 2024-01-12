@@ -13,3 +13,14 @@ message ProductInfo
 	repeated AppInfo apps = 2;
 	bool metadata_only = 3;
 }
+message ProductInfoResponse
+{
+	message AppInfo
+	{
+		optional bool missing_token = 3;
+		optional bytes sha = 4;
+		optional bytes buffer = 5;
+		optional uint32 size = 7;
+	}
+	repeated AppInfo apps = 1;
+}

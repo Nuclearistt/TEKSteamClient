@@ -7,3 +7,15 @@ message CDNServers
 {
 	uint32 cell_id = 1;
 }
+message CDNServersResponse
+{
+	message Server
+	{
+		optional string type = 1;
+		optional float load = 5;
+		optional string host = 9;
+		optional string https_support = 12;
+		optional bool preferred_server = 14;
+	}
+	repeated Server servers = 1;
+}

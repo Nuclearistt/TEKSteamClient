@@ -11,3 +11,17 @@ message QueryWorkshopItems
 	optional string search_text = 11;
 	bool return_metadata = 32;
 }
+message QueryWorkshopItemsResponse
+{
+	message Item
+	{
+		optional int32 result = 1;
+		optional uint64 id = 2;
+		optional string preview_url = 11;
+		optional fixed64 manifest_id = 14;
+		optional string name = 16;
+		optional int64 last_updated = 20;
+	}
+	uint32 total = 1;
+	repeated Item items = 2;
+}

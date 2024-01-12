@@ -10,3 +10,7 @@ message DepotPatchInfo
 	uint64 source_manifest_id = 3;
 	uint64 target_manifest_id = 4;
 }
+message DepotPatchInfoResponse
+{
+	bool is_available = 1;
+}

@@ -1,9 +1,0 @@
-syntax="proto3";
-
-package teksteamclient.cm.messages.bodies;
-option csharp_namespace = "TEKSteamClient.CM.Messages.Bodies";
-
-message DepotPatchInfoResponse
-{
-	bool is_available = 1;
-}

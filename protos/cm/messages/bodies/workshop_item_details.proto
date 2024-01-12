@@ -8,3 +8,17 @@ message WorkshopItemDetails
 	repeated fixed64 ids = 1;
 	bool include_metadata = 11;
 }
+message WorkshopItemDetailsResponse
+{
+	message Item
+	{
+		optional int32 result = 1;
+		optional uint64 id = 2;
+		optional uint32 app_id = 5;
+		optional string preview_url = 11;
+		optional fixed64 manifest_id = 14;
+		optional string name = 16;
+		optional int64 last_updated = 20;
+	}
+	repeated Item items = 1;
+}

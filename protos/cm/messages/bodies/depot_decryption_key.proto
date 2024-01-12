@@ -8,3 +8,8 @@ message DepotDecryptionKey
 	uint32 depot_id = 1;
 	uint32 app_id = 2;
 }
+message DepotDecryptionKeyResponse
+{
+	int32 result = 1;
+	optional bytes key = 3;
+}

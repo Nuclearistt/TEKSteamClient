@@ -10,3 +10,7 @@ message ManifestRequestCode
 	uint64 manifest_id = 3;
 	string app_branch = 4;
 }
+message ManifestRequestCodeResponse
+{
+	optional uint64 request_code = 1;
+}
