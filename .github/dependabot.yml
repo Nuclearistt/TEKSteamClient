@@ -1,0 +1,14 @@
+version: 2
+updates:
+- package-ecosystem: nuget
+  directory: "/"
+  schedule:
+    interval: daily
+
+- package-ecosystem: "github-actions"
+  directory: "/"
+  schedule:
+    interval: weekly
+  ignore:
+    - dependency-name: "*"
+      update-types: ["version-update:semver-minor", "version-update:semver-patch"]
