@@ -1,6 +1,7 @@
 # TEK Steam Client
 [![Discord](https://img.shields.io/discord/937821572285206659?style=flat-square&label=Discord&logo=discord&logoColor=white&color=7289DA)](https://discord.com/servers/teknology-hub-937821572285206659)
 [![NuGet](https://img.shields.io/nuget/v/TEKSteamClient?style=flat-square&label=NuGet)](https://nuget.org/packages/TEKSteamClient)
+[![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/Nuclearistt/TEKSteamClient/build.yaml?style=flat-square)](https://github.com/Nuclearistt/TEKSteamClient/actions/workflows/build.yaml)
 
 ## Overview
 
