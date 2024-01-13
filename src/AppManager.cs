@@ -45,6 +45,8 @@ public class AppManager
 			if (!Directory.Exists(CdnClient.ManifestsDirectory))
 				Directory.CreateDirectory(CdnClient.ManifestsDirectory);
 		}
+		if (workshopContentPath is not null && !Directory.Exists(workshopContentPath))
+			Directory.CreateDirectory(workshopContentPath);
 		var attributes = File.GetAttributes(_scDataPath);
 		if ((attributes & FileAttributes.ReadOnly) is not FileAttributes.None)
 			File.SetAttributes(_scDataPath, attributes & ~FileAttributes.ReadOnly);
@@ -983,7 +985,7 @@ public class AppManager
 					targetManifestId = CmClient.GetWorkshopItemManifestId(AppId, item.WorkshopItemId);
 			}
 		}
-		var state = new ItemState(item, Path.Combine(_scDataPath, $"{item}.scdepotstate"));
+		var state = new ItemState(item, Path.Combine(_scDataPath, $"{item}.scitemstate"));
 		if (state.CurrentManifestId is 0)
 			return Validate(item, cancellationToken, targetManifestId); //Cannot update when source version is unknown
 		if (state.CurrentManifestId == targetManifestId)
@@ -1038,7 +1040,7 @@ public class AppManager
 					manifestId = CmClient.GetWorkshopItemManifestId(AppId, item.WorkshopItemId);
 			}
 		}
-		var state = new ItemState(item, Path.Combine(_scDataPath, $"{item}.scdepotstate"));
+		var state = new ItemState(item, Path.Combine(_scDataPath, $"{item}.scitemstate"));
 		var manifest = CdnClient.GetManifest(AppId, item, manifestId, cancellationToken);
 		string deltaFilePath = Path.Combine(CdnClient.DownloadsDirectory!, $"{item}-{manifestId}.scdelta");
 		DepotDelta delta;

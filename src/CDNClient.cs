@@ -151,7 +151,7 @@ public class CDNClient
 		Exception? exception = null;
 		string? chunkBufferFilePath = null;
 		LimitedUseFileHandle? chunkBufferFileHandle = null;
-		string baseRequestUrl = $"depot/{state.Id}/chunk/";
+		string baseRequestUrl = $"depot/{state.Id.DepotId}/chunk/";
 		void downloadDir(in DirectoryEntry dir, in DirectoryEntry.AcquisitionEntry acquisitionDir, string path, int recursionLevel)
 		{
 			int index;
