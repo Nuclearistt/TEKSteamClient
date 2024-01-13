@@ -187,7 +187,7 @@ public class DepotManifest
 		DirectoryBuffer = new DirectoryEntry[Unsafe.As<byte, int>(ref Unsafe.AddByteOffset(ref bufferRef, 12))];
 		DataSize = Unsafe.As<byte, long>(ref Unsafe.AddByteOffset(ref bufferRef, 16));
 		int offset = 24;
-		int entriesSize = FileBuffer.Length * 20 + DirectoryBuffer.Length * 16;
+		int entriesSize = FileBuffer.Length * 16 + DirectoryBuffer.Length * 12;
 		int nameOffset = 24 + ChunkBuffer.Length * 40 + entriesSize;
 		_nameBufferSize = buffer.Length - nameOffset;
 		ref ChunkEntry chunkBufferRef = ref MemoryMarshal.GetArrayDataReference(ChunkBuffer);

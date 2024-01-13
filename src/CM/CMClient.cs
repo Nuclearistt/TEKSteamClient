@@ -1,5 +1,6 @@
 ﻿using System.Collections.Frozen;
 using System.Diagnostics;
+using System.IO.Compression;
 using System.Net;
 using System.Net.Http.Json;
 using System.Runtime.InteropServices;
@@ -336,7 +337,7 @@ public partial class CMClient
 				var httpRequest = new HttpRequestMessage(HttpMethod.Get, new Uri($"{appId}/sha/{Convert.ToHexString(appInfo.Sha.Span)}.txt.gz")) { Version = HttpVersion.Version20 };
 				using var httpResponse = s_clientConfigClient.SendAsync(httpRequest, HttpCompletionOption.ResponseContentRead, CancellationToken.None).Result.EnsureSuccessStatusCode();
 				using var content = httpResponse.Content;
-				using var reader = new StreamReader(content.ReadAsStream());
+				using var reader = new StreamReader(new GZipStream(content.ReadAsStream(), CompressionMode.Decompress));
 				entries = new VDFEntry(reader)["depots"]?.Children;
 			}
 			catch (HttpRequestException e) { throw new SteamException(SteamException.ErrorType.CMFailedToGetManifestIds, e); }

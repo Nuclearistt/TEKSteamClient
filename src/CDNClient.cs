@@ -733,7 +733,7 @@ public class CDNClient
 			CompressedSize = Unsafe.As<byte, int>(ref Unsafe.AddByteOffset(ref bufferRef, entryOffset));
 			UncompressedSize = Unsafe.As<byte, int>(ref Unsafe.AddByteOffset(ref bufferRef, entryOffset + 4));
 			Checksum = Unsafe.As<byte, uint>(ref Unsafe.AddByteOffset(ref bufferRef, entryOffset + 8));
-			int chunksLeft = Unsafe.As<byte, int>(ref Unsafe.AddByteOffset(ref bufferRef, entryOffset + 12)) = FileHandle.ChunksLeft;
+			int chunksLeft = Unsafe.As<byte, int>(ref Unsafe.AddByteOffset(ref bufferRef, entryOffset + 12));
 			FileOffset = Unsafe.As<byte, long>(ref Unsafe.AddByteOffset(ref bufferRef, entryOffset + 16));
 			int stringLength = Unsafe.As<byte, int>(ref Unsafe.AddByteOffset(ref bufferRef, entryOffset + 24));
 			FilePath = Encoding.UTF8.GetString(buffer.Slice(stringOffset, stringLength));
