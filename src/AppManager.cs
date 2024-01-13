@@ -15,10 +15,12 @@ public class AppManager
 	/// <summary>Creates a new app manager for specified Steam app.</summary>
 	/// <param name="appId">ID of the Steam app.</param>
 	/// <param name="installationPath">Path to the root directory of app installation.</param>
-	public AppManager(uint appId, string installationPath)
+	/// <param name="workshopContentPath">Path to the workshop content installation directory.</param>
+	public AppManager(uint appId, string installationPath, [Optional]string? workshopContentPath)
 	{
 		AppId = appId;
 		InstallationPath = installationPath;
+		WorkshopContentPath = workshopContentPath;
 		_scDataPath = Path.Combine(installationPath, "SCData");
 		CdnClient = new()
 		{
@@ -53,6 +55,8 @@ public class AppManager
 	public uint AppId { get; }
 	/// <summary>Path to the root directory of app installation.</summary>
 	public string InstallationPath { get; }
+	/// <summary>Path to the workshop content installation directory.</summary>
+	public string? WorkshopContentPath { get; }
 	/// <summary>Steam CDN client used to download content from CDN network.</summary>
 	public CDNClient CdnClient { get; }
 	/// <summary>Steam CM client used to get data from CM network.</summary>
@@ -66,22 +70,24 @@ public class AppManager
 	/// <param name="cancellationToken">Token to monitor for cancellation requests.</param>
 	private void Commit(ItemState state, DepotManifest? sourceManifest, DepotManifest targetManifest, DepotPatch? patch, DepotDelta delta, CancellationToken cancellationToken)
 	{
+		string localPath = state.Id.WorkshopItemId is 0 ? InstallationPath : Path.Combine(WorkshopContentPath ?? Path.Combine(_scDataPath, "Workshop"), state.Id.WorkshopItemId.ToString());
 		if (state.Status <= ItemState.ItemStatus.Patching && delta.NumTransferOperations > 0)
-			PatchAndRelocateChunks(state, sourceManifest!, targetManifest, patch, delta, cancellationToken);
+			PatchAndRelocateChunks(state, localPath, sourceManifest!, targetManifest, patch, delta, cancellationToken);
 		if (state.Status <= ItemState.ItemStatus.WritingNewData)
-			WriteNewData(state, targetManifest, delta, cancellationToken);
+			WriteNewData(state, localPath, targetManifest, delta, cancellationToken);
 		if (delta.NumRemovals > 0)
-			RemoveOldFiles(state, sourceManifest!, targetManifest, delta, cancellationToken);
+			RemoveOldFiles(state, localPath, sourceManifest!, targetManifest, delta, cancellationToken);
 	}
 	/// <summary>Performs chunk patching and relocation.</summary>
 	/// <param name="state">State of the item.</param>
+	/// <param name="localPath">Path to the local item installation directory.</param>
 	/// <param name="sourceManifest">The source manifest.</param>
 	/// <param name="targetManifest">The target manifest.</param>
 	/// <param name="patch">Patch to apply to source data.</param>
 	/// <param name="delta">Delta object that lists chunks to be patched and relocated.</param>
 	/// <param name="cancellationToken">Token to monitor for cancellation requests.</param>
 	/// <exception cref="SteamException">Item installation is corrupted.</exception>
-	private void PatchAndRelocateChunks(ItemState state, DepotManifest sourceManifest, DepotManifest targetManifest, DepotPatch? patch, DepotDelta delta, CancellationToken cancellationToken)
+	private void PatchAndRelocateChunks(ItemState state, string localPath, DepotManifest sourceManifest, DepotManifest targetManifest, DepotPatch? patch, DepotDelta delta, CancellationToken cancellationToken)
 	{
 		byte[] buffer = GC.AllocateUninitializedArray<byte>(delta.MaxTransferBufferSize);
 		SafeFileHandle? intermediateFileHandle = null;
@@ -284,7 +290,7 @@ public class AppManager
 		ProgressInitiated?.Invoke(ProgressType.Percentage, delta.NumTransferOperations, state.DisplayProgress);
 		if (delta.IntermediateFileSize > 0)
 			intermediateFileHandle = File.OpenHandle(Path.Combine(CdnClient.DownloadsDirectory!, $"{state.Id}.screlocpatchcache"), FileMode.OpenOrCreate, FileAccess.ReadWrite, options: FileOptions.SequentialScan);
-		processDir(in targetManifest.Root, in delta.AuxiliaryTree, InstallationPath, 0);
+		processDir(in targetManifest.Root, in delta.AuxiliaryTree,localPath, 0);
 		intermediateFileHandle?.Dispose();
 		if (cancellationToken.IsCancellationRequested)
 		{
@@ -296,11 +302,12 @@ public class AppManager
 	}
 	/// <summary>Deletes files and directories that have been removed from the target manifest.</summary>
 	/// <param name="state">State of the item.</param>
+	/// <param name="localPath">Path to the local item installation directory.</param>
 	/// <param name="sourceManifest">The source manifest.</param>
 	/// <param name="targetManifest">The target manifest.</param>
 	/// <param name="delta">Delta object that lists files and directories to be removed.</param>
 	/// <param name="cancellationToken">Token to monitor for cancellation requests.</param>
-	private void RemoveOldFiles(ItemState state, DepotManifest sourceManifest, DepotManifest targetManifest, DepotDelta delta, CancellationToken cancellationToken)
+	private void RemoveOldFiles(ItemState state, string localPath, DepotManifest sourceManifest, DepotManifest targetManifest, DepotDelta delta, CancellationToken cancellationToken)
 	{
 		void processDir(in DirectoryEntry dir, in DirectoryEntry.AuxiliaryEntry auxiliaryDir, string path, int recursionLevel)
 		{
@@ -359,7 +366,7 @@ public class AppManager
 		}
 		StatusUpdated?.Invoke(Status.RemovingOldFiles);
 		ProgressInitiated?.Invoke(ProgressType.Numeric, delta.NumRemovals, state.DisplayProgress);
-		processDir(in targetManifest.Root, in delta.AuxiliaryTree, InstallationPath, 0);
+		processDir(in targetManifest.Root, in delta.AuxiliaryTree, localPath, 0);
 		if (cancellationToken.IsCancellationRequested)
 		{
 			state.SaveToFile();
@@ -368,10 +375,11 @@ public class AppManager
 	}
 	/// <summary>Moves acquired files and chunks to app installation.</summary>
 	/// <param name="state">State of the item.</param>
+	/// <param name="localPath">Path to the local item installation directory.</param>
 	/// <param name="manifest">The target manifest.</param>
 	/// <param name="delta">Delta object that lists data to be written.</param>
 	/// <param name="cancellationToken">Token to monitor for cancellation requests.</param>
-	private void WriteNewData(ItemState state, DepotManifest manifest, DepotDelta delta, CancellationToken cancellationToken)
+	private void WriteNewData(ItemState state, string localPath, DepotManifest manifest, DepotDelta delta, CancellationToken cancellationToken)
 	{
 		byte[] buffer = GC.AllocateUninitializedArray<byte>(0x100000);
 		SafeFileHandle? chunkBufferFileHandle = null;
@@ -476,7 +484,7 @@ public class AppManager
 		ProgressInitiated?.Invoke(ProgressType.Binary, delta.DownloadCacheSize - delta.IntermediateFileSize, state.DisplayProgress);
 		if (delta.ChunkBufferFileSize > 0)
 			chunkBufferFileHandle = File.OpenHandle(Path.Combine(CdnClient.DownloadsDirectory!, $"{state.Id}.scchunkbuffer"), options: FileOptions.SequentialScan);
-		writeDir(in manifest.Root, in delta.AcquisitionTree, Path.Combine(CdnClient.DownloadsDirectory!, state.Id.ToString()), InstallationPath, 0);
+		writeDir(in manifest.Root, in delta.AcquisitionTree, Path.Combine(CdnClient.DownloadsDirectory!, state.Id.ToString()), localPath, 0);
 		chunkBufferFileHandle?.Dispose();
 		if (cancellationToken.IsCancellationRequested)
 		{
@@ -934,7 +942,7 @@ public class AppManager
 			state.ProgressIndexStack.RemoveAt(recursionLevel);
 			return;
 		}
-		string basePath = manifest.Item.WorkshopItemId == 0 ? InstallationPath : Path.Combine(InstallationPath, "Workshop", manifest.Item.WorkshopItemId.ToString());
+		string basePath = state.Id.WorkshopItemId is 0 ? InstallationPath : Path.Combine(WorkshopContentPath ?? Path.Combine(_scDataPath, "Workshop"), state.Id.WorkshopItemId.ToString());
 		if (state.Status is not ItemState.ItemStatus.Validating)
 		{
 			state.Status = ItemState.ItemStatus.Validating;
