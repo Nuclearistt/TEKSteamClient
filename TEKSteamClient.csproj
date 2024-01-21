@@ -29,8 +29,8 @@
 	</PropertyGroup>
 	<PropertyGroup Condition="'$(Configuration)' == 'Release'">
 		<Optimize>True</Optimize>
-		<SignAssembly Condition="Exists('SigningKey.snk')">True</SignAssembly>
-		<AssemblyOriginatorKeyFile>SigningKey.snk</AssemblyOriginatorKeyFile>
+		<SignAssembly>True</SignAssembly>
+		<AssemblyOriginatorKeyFile>TEKSteamClient.snk</AssemblyOriginatorKeyFile>
 		<DelaySign>False</DelaySign>
 		<GenerateDocumentationFile>True</GenerateDocumentationFile>
 	</PropertyGroup>
