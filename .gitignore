@@ -1,5 +1,6 @@
 .vs/
 bin/
 obj/
+Properties/
 *.g.cs
 Debug.cs

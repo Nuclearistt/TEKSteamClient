@@ -20,13 +20,13 @@ public class AppManager
 	{
 		AppId = appId;
 		InstallationPath = installationPath;
-		WorkshopContentPath = workshopContentPath;
 		_scDataPath = Path.Combine(installationPath, "SCData");
+		WorkshopContentPath = workshopContentPath ?? Path.Combine(_scDataPath, "Workshop");
 		CdnClient = new()
 		{
 			DownloadsDirectory = Path.Combine(_scDataPath, "Downloads"),
 			ManifestsDirectory = Path.Combine(_scDataPath, "Manifests"),
-			CmClient = CmClient,
+			CmClient = CmClient
 		};
 		CdnClient.ProgressInitiated += (type, totalValue, initialValue) => ProgressInitiated?.Invoke(type, totalValue, initialValue);
 		CdnClient.ProgressUpdated += (newValue) => ProgressUpdated?.Invoke(newValue);
@@ -45,8 +45,8 @@ public class AppManager
 			if (!Directory.Exists(CdnClient.ManifestsDirectory))
 				Directory.CreateDirectory(CdnClient.ManifestsDirectory);
 		}
-		if (workshopContentPath is not null && !Directory.Exists(workshopContentPath))
-			Directory.CreateDirectory(workshopContentPath);
+		if (!Directory.Exists(WorkshopContentPath))
+			Directory.CreateDirectory(WorkshopContentPath);
 		var attributes = File.GetAttributes(_scDataPath);
 		if ((attributes & FileAttributes.ReadOnly) is not FileAttributes.None)
 			File.SetAttributes(_scDataPath, attributes & ~FileAttributes.ReadOnly);
@@ -58,7 +58,7 @@ public class AppManager
 	/// <summary>Path to the root directory of app installation.</summary>
 	public string InstallationPath { get; }
 	/// <summary>Path to the workshop content installation directory.</summary>
-	public string? WorkshopContentPath { get; }
+	public string WorkshopContentPath { get; }
 	/// <summary>Steam CDN client used to download content from CDN network.</summary>
 	public CDNClient CdnClient { get; }
 	/// <summary>Steam CM client used to get data from CM network.</summary>
@@ -72,7 +72,7 @@ public class AppManager
 	/// <param name="cancellationToken">Token to monitor for cancellation requests.</param>
 	private void Commit(ItemState state, DepotManifest? sourceManifest, DepotManifest targetManifest, DepotPatch? patch, DepotDelta delta, CancellationToken cancellationToken)
 	{
-		string localPath = state.Id.WorkshopItemId is 0 ? InstallationPath : Path.Combine(WorkshopContentPath ?? Path.Combine(_scDataPath, "Workshop"), state.Id.WorkshopItemId.ToString());
+		string localPath = state.Id.WorkshopItemId is 0 ? InstallationPath : Path.Combine(WorkshopContentPath, state.Id.WorkshopItemId.ToString());
 		if (state.Status <= ItemState.ItemStatus.Patching && delta.NumTransferOperations > 0)
 			PatchAndRelocateChunks(state, localPath, sourceManifest!, targetManifest, patch, delta, cancellationToken);
 		if (state.Status <= ItemState.ItemStatus.WritingNewData)
@@ -944,7 +944,7 @@ public class AppManager
 			state.ProgressIndexStack.RemoveAt(recursionLevel);
 			return;
 		}
-		string basePath = state.Id.WorkshopItemId is 0 ? InstallationPath : Path.Combine(WorkshopContentPath ?? Path.Combine(_scDataPath, "Workshop"), state.Id.WorkshopItemId.ToString());
+		string basePath = state.Id.WorkshopItemId is 0 ? InstallationPath : Path.Combine(WorkshopContentPath, state.Id.WorkshopItemId.ToString());
 		if (state.Status is not ItemState.ItemStatus.Validating)
 		{
 			state.Status = ItemState.ItemStatus.Validating;

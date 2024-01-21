@@ -57,12 +57,12 @@ public class DepotManifest
 					throw new SteamException(SteamException.ErrorType.ManifestCorrupted, 3);
 				aes.DecryptEcb(encryptedName[..16], iv, PaddingMode.None);
 				bytesDecoded = aes.DecryptCbc(encryptedName[16..bytesDecoded], iv, decryptedName);
-				file.Name = Encoding.UTF8.GetString(decryptedName[..--bytesDecoded]).Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar);
+				file.Name = Encoding.UTF8.GetString(decryptedName[..--bytesDecoded]).Replace(s_oppositeDirectorySeparatorChar, Path.DirectorySeparatorChar);
 			}
 		}
 		else
 			foreach (var file in files)
-				file.Name = file.Name.Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar);
+				file.Name = file.Name.Replace(s_oppositeDirectorySeparatorChar, Path.DirectorySeparatorChar);
 		//Create and populate fields with data from payload
 		files.Sort((left, right) => string.Compare(left.Name, right.Name, StringComparison.Ordinal));
 		int numChunks = 0;
@@ -251,6 +251,8 @@ public class DepotManifest
 	internal readonly FileEntry[] FileBuffer;
 	/// <summary>Buffer containing all directory entries of the manifest.</summary>
 	internal readonly DirectoryEntry[] DirectoryBuffer;
+	/// <summary>Directory separator character opposite to the one used in current OS.</summary>
+	private static readonly char s_oppositeDirectorySeparatorChar = Path.DirectorySeparatorChar is '/' ? '\\' : '/';
 	/// <summary>Total size of all files listed in the manifest.</summary>
 	public long DataSize { get; }
 	/// <summary>ID of the manifest.</summary>
