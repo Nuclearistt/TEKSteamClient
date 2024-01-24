@@ -71,7 +71,7 @@ public class DepotManifest
 		foreach (var file in files)
 		{
 			_nameBufferSize += Encoding.UTF8.GetByteCount(Path.GetFileName(file.Name));
-			if ((file.Flags & FileFlag.Directory) is not 0)
+			if (file.Flags.HasFlag(FileFlag.Directory))
 				numDirs++;
 			else
 			{
@@ -111,7 +111,7 @@ public class DepotManifest
 				int numSepChars = file.Name.AsSpan().Count(Path.DirectorySeparatorChar);
 				if (numSepChars - dirNumSepChars is not 1 || numSepChars > 0 && file.Name[path.Length] != Path.DirectorySeparatorChar)
 					continue;
-				if ((file.Flags & FileFlag.Directory) is not 0)
+				if (file.Flags.HasFlag(FileFlag.Directory))
 				{
 					dirOffset++;
 					continue;
@@ -128,10 +128,17 @@ public class DepotManifest
 						Checksum = chunk.Checksum
 				    };
 				new Span<ChunkEntry>(ChunkBuffer, chunkStartOffset, numChunks).Sort();
+				FileEntry.Flag flags = 0;
+				if (file.Flags.HasFlag(FileFlag.Readonly))
+					flags = FileEntry.Flag.ReadOnly;
+				if (file.Flags.HasFlag(FileFlag.Hidden))
+					flags |= FileEntry.Flag.Hidden;
+				if (file.Flags.HasFlag(FileFlag.Executable))
+					flags |= FileEntry.Flag.Executable;
 				FileBuffer[fileOffset++] = new()
 				{
 				    Name = numSepChars > 0 ? Path.GetFileName(file.Name) : file.Name,
-					Size = file.Size,
+					SizeAndFlags = file.Size | ((long)flags << 56),
 				    Chunks = new(ChunkBuffer, chunkStartOffset, numChunks)
 				};
 			}
@@ -142,7 +149,7 @@ public class DepotManifest
 			for (int i = startIndex; i < endIndex; i++)
 			{
 				var file = files[i];
-				if ((file.Flags & FileFlag.Directory) is not 0)
+				if (file.Flags.HasFlag(FileFlag.Directory))
 				{
 					int numSepChars = file.Name.AsSpan().Count(Path.DirectorySeparatorChar);
 					if (numSepChars - dirNumSepChars is 1 && (numSepChars < 1 || file.Name[path.Length] == Path.DirectorySeparatorChar))
@@ -209,7 +216,7 @@ public class DepotManifest
 			FileBuffer[i] = new()
 			{
 				Name = Encoding.UTF8.GetString(buffer.Slice(nameOffset, nameLength)),
-				Size = Unsafe.As<int, long>(ref Unsafe.Add(ref spanRef, offset)),
+				SizeAndFlags = Unsafe.As<int, long>(ref Unsafe.Add(ref spanRef, offset)),
 				Chunks = new(ChunkBuffer, chunkOffset, numChunks)
 			};
 			offset += 4;
@@ -289,7 +296,7 @@ public class DepotManifest
 		{
 			int nameLength = Encoding.UTF8.GetBytes(file.Name, buffer[nameOffset..]);
 			nameOffset += nameLength;
-			Unsafe.As<int, long>(ref Unsafe.Add(ref spanRef, offset)) = file.Size;
+			Unsafe.As<int, long>(ref Unsafe.Add(ref spanRef, offset)) = file.SizeAndFlags;
 			offset += 2;
 			entriesSpan[offset++] = nameLength;
 			entriesSpan[offset++] = file.Chunks.Count;

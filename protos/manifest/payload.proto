@@ -10,6 +10,9 @@ message Payload
 		enum FileFlag
 		{
 			NONE = 0;
+			READONLY = 8;
+			HIDDEN = 16;
+			EXECUTABLE = 32;
 			DIRECTORY = 64;
 		}
 		message Chunk

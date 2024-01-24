@@ -7,10 +7,25 @@ public readonly struct FileEntry
 {
 	/// <summary>Name of the file.</summary>
 	public required string Name { get; init; }
+	/// <summary>Total size of the file OR'ed with its flags. Used only during initialization.</summary>
+	public required long SizeAndFlags { get; init; }
 	/// <summary>Total size of the file.</summary>
-	public required long Size { get; init; }
+	public long Size => SizeAndFlags & 0x00FFFFFFFFFFFFFF;
+	/// <summary>Extra flags of the file.</summary>
+	public Flag Flags => (Flag)((SizeAndFlags & 0x7F00000000000000) >> 56);
 	/// <summary>Chunks that compose the file.</summary>
 	public required ArraySegment<ChunkEntry> Chunks { get; init; }
+	/// <summary>Extra flags describing file's attributes or permissions.</summary>
+	[Flags]
+	public enum Flag
+	{
+		/// <summary>The file has <see cref="FileAttributes.ReadOnly"/> attribute.</summary>
+		ReadOnly = 1 << 0,
+		/// <summary>The file has <see cref="FileAttributes.Hidden"/> attribute.</summary>
+		Hidden = 1 << 1,
+		/// <summary>The file has <see cref="UnixFileMode.UserExecute"/>, <see cref="UnixFileMode.GroupExecute"/> and <see cref="UnixFileMode.OtherExecute"/> permissions.</summary>
+		Executable = 1 << 2
+	}
 	/// <summary>Structure used in <see cref="DepotDelta"/> to store indexes of files and chunks that must be acquired.</summary>
 	internal readonly struct AcquisitionEntry
 	{
@@ -18,7 +33,8 @@ public readonly struct FileEntry
 		public required int Index { get; init; }
 		/// <summary>File's chunks that must be acquired. If empty, the whole file is acquired.</summary>
 		public required ArraySegment<ChunkEntry> Chunks { get; init; }
-		//struct int long
+		/// <summary>Structure storing chunk's index along with its optional offset in chunk buffer file.</summary>
+		/// <param name="index">Index of the chunk in its file.</param>
 		public readonly struct ChunkEntry(int index)
 		{
 			/// <summary>Index of the chunk entry in its file.</summary>
