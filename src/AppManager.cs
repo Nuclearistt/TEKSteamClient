@@ -1,5 +1,6 @@
 ﻿using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
 using Microsoft.Win32.SafeHandles;
 using TEKSteamClient.CM;
 using TEKSteamClient.Manifest;
@@ -48,7 +49,7 @@ public class AppManager
 		if (!Directory.Exists(WorkshopContentPath))
 			Directory.CreateDirectory(WorkshopContentPath);
 		var attributes = File.GetAttributes(_scDataPath);
-		if ((attributes & FileAttributes.ReadOnly) is not FileAttributes.None)
+		if (attributes.HasFlag(FileAttributes.ReadOnly))
 			File.SetAttributes(_scDataPath, attributes & ~FileAttributes.ReadOnly);
 	}
 	/// <summary>Path to SCData directory.</summary>
@@ -117,7 +118,7 @@ public class AppManager
 				var file = dir.Files[auxiliaryFile.Index];
 				string filePath = Path.Combine(path, file.Name);
 				var attributes = File.GetAttributes(filePath);
-				if ((attributes & FileAttributes.ReadOnly) is not FileAttributes.None)
+				if (attributes.HasFlag(FileAttributes.ReadOnly))
 					File.SetAttributes(filePath, attributes & ~FileAttributes.ReadOnly);
 				using var fileHandle = File.OpenHandle(filePath, access: FileAccess.ReadWrite, options: FileOptions.RandomAccess);
 				long fileSize = RandomAccess.GetLength(fileHandle);
@@ -395,7 +396,6 @@ public class AppManager
 				foreach (var subdir in dir.Subdirectories)
 					result += countTotalDirSize(in subdir);
 				return result;
-
 			}
 			if (acquisitionDir.IsNew)
 			{
@@ -423,7 +423,22 @@ public class AppManager
 				var file = dir.Files[acquisitonFile.Index];
 				if (acquisitonFile.Chunks.Count is 0)
 				{
-					File.Move(Path.Combine(downloadPath, file.Name), Path.Combine(localPath, file.Name), true);
+					string destinationFile = Path.Combine(localPath, file.Name);
+					if (File.Exists(destinationFile))
+						File.Delete(destinationFile);
+					File.Move(Path.Combine(downloadPath, file.Name), destinationFile);
+					if (file.Flags is not 0)
+					{
+						var attributes = (FileAttributes)0;
+						if (file.Flags.HasFlag(FileEntry.Flag.ReadOnly))
+							attributes = FileAttributes.ReadOnly;
+						if (file.Flags.HasFlag(FileEntry.Flag.Hidden))
+							attributes |= FileAttributes.Hidden;
+						if (attributes is not 0)
+							File.SetAttributes(destinationFile, attributes);
+						if (file.Flags.HasFlag(FileEntry.Flag.Executable) && !OperatingSystem.IsWindows())
+							File.SetUnixFileMode(destinationFile, File.GetUnixFileMode(destinationFile) | UnixFileMode.UserExecute | UnixFileMode.GroupExecute | UnixFileMode.OtherExecute);
+					}
 					state.DisplayProgress += file.Size;
 					ProgressUpdated?.Invoke(state.DisplayProgress);
 				}
@@ -440,7 +455,7 @@ public class AppManager
 					}
 					string filePath = Path.Combine(localPath, file.Name);
 					var attributes = File.GetAttributes(filePath);
-					if ((attributes & FileAttributes.ReadOnly) is not FileAttributes.None)
+					if (attributes.HasFlag(FileAttributes.ReadOnly))
 						File.SetAttributes(filePath, attributes & ~FileAttributes.ReadOnly);
 					using var fileHandle = File.OpenHandle(filePath, access: FileAccess.Write, options: FileOptions.RandomAccess);
 					for (; chunkIndex < acquisitonFile.Chunks.Count; chunkIndex++)

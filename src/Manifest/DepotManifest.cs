@@ -71,7 +71,7 @@ public class DepotManifest
 		foreach (var file in files)
 		{
 			_nameBufferSize += Encoding.UTF8.GetByteCount(Path.GetFileName(file.Name));
-			if ((file.Flags & FileFlag.Directory) is not 0)
+			if (file.Flags.HasFlag(FileFlag.Directory))
 				numDirs++;
 			else
 			{
@@ -111,7 +111,7 @@ public class DepotManifest
 				int numSepChars = file.Name.AsSpan().Count(Path.DirectorySeparatorChar);
 				if (numSepChars - dirNumSepChars is not 1 || numSepChars > 0 && file.Name[path.Length] != Path.DirectorySeparatorChar)
 					continue;
-				if ((file.Flags & FileFlag.Directory) is not 0)
+				if (file.Flags.HasFlag(FileFlag.Directory))
 				{
 					dirOffset++;
 					continue;
@@ -129,11 +129,11 @@ public class DepotManifest
 				    };
 				new Span<ChunkEntry>(ChunkBuffer, chunkStartOffset, numChunks).Sort();
 				FileEntry.Flag flags = 0;
-				if ((file.Flags & FileFlag.Readonly) is not FileFlag.None)
+				if (file.Flags.HasFlag(FileFlag.Readonly))
 					flags = FileEntry.Flag.ReadOnly;
-				if ((file.Flags & FileFlag.Hidden) is not FileFlag.None)
+				if (file.Flags.HasFlag(FileFlag.Hidden))
 					flags |= FileEntry.Flag.Hidden;
-				if ((file.Flags & FileFlag.Executable) is not FileFlag.None)
+				if (file.Flags.HasFlag(FileFlag.Executable))
 					flags |= FileEntry.Flag.Executable;
 				FileBuffer[fileOffset++] = new()
 				{
@@ -149,7 +149,7 @@ public class DepotManifest
 			for (int i = startIndex; i < endIndex; i++)
 			{
 				var file = files[i];
-				if ((file.Flags & FileFlag.Directory) is not 0)
+				if (file.Flags.HasFlag(FileFlag.Directory))
 				{
 					int numSepChars = file.Name.AsSpan().Count(Path.DirectorySeparatorChar);
 					if (numSepChars - dirNumSepChars is 1 && (numSepChars < 1 || file.Name[path.Length] == Path.DirectorySeparatorChar))
