@@ -9,6 +9,7 @@ message Payload
 	{
 		enum FileFlag
 		{
+			NONE = 0;
 			READONLY = 8;
 			HIDDEN = 16;
 			EXECUTABLE = 32;
