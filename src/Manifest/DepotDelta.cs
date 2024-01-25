@@ -28,7 +28,7 @@ internal class DepotDelta
 			foreach (var acquisitionFile in acquisitionDir.Files)
 			{
 				numChunks += acquisitionFile.Chunks.Count;
-				var file = dir.Files[acquisitionFile.Index];
+				var file = manifest.FileBuffer[acquisitionFile.Index];
 				if (acquisitionFile.Chunks.Count is 0)
 				{
 					numDownloadFiles++;
@@ -40,7 +40,7 @@ internal class DepotDelta
 					for (int i = 0; i < acquisitionFile.Chunks.Count; i++)
 					{
 						int index = acquisitionFile.Chunks[i].Index;
-						var chunk = file.Chunks[index];
+						var chunk = manifest.ChunkBuffer[index];
 						downloadSize += chunk.CompressedSize;
 						acquisitionFile.Chunks[i] = new(index) { Offset = chunkBufferFileSize };
 						chunkBufferFileSize += chunk.UncompressedSize;

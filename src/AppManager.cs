@@ -94,7 +94,7 @@ public class AppManager
 		byte[] buffer = GC.AllocateUninitializedArray<byte>(delta.MaxTransferBufferSize);
 		SafeFileHandle? intermediateFileHandle = null;
 		var decoder = new Utils.LZMA.Decoder();
-		void processDir(in DirectoryEntry dir, in DirectoryEntry.AuxiliaryEntry auxiliaryDir, string path, int recursionLevel)
+		void processDir(in DirectoryEntry.AuxiliaryEntry dir, string path, int recursionLevel)
 		{
 			int index;
 			if (state.ProgressIndexStack.Count > recursionLevel)
@@ -104,9 +104,9 @@ public class AppManager
 				state.ProgressIndexStack.Add(0);
 				index = 0;
 			}
-			for (; index < auxiliaryDir.Files.Count; index++)
+			for (; index < dir.Files.Count; index++)
 			{
-				var auxiliaryFile = auxiliaryDir.Files[index];
+				var auxiliaryFile = dir.Files[index];
 				if (auxiliaryFile.TransferOperations.Count is 0)
 					continue;
 				if (cancellationToken.IsCancellationRequested)
@@ -114,7 +114,7 @@ public class AppManager
 					state.ProgressIndexStack[recursionLevel] = index;
 					return;
 				}
-				var file = dir.Files[auxiliaryFile.Index];
+				var file = targetManifest.FileBuffer[auxiliaryFile.Index];
 				string filePath = Path.Combine(path, file.Name);
 				var attributes = File.GetAttributes(filePath);
 				if (attributes.HasFlag(FileAttributes.ReadOnly))
@@ -143,7 +143,7 @@ public class AppManager
 					if (transferOperation is FileEntry.AuxiliaryEntry.ChunkPatchEntry chunkPatch)
 					{
 						var sourceChunk = sourceManifest.ChunkBuffer[patch!.Chunks[chunkPatch.PatchChunkIndex].SourceChunkIndex];
-						var targetChunk = file.Chunks[chunkPatch.ChunkIndex];
+						var targetChunk = targetManifest.ChunkBuffer[chunkPatch.ChunkIndex];
 						if (sourceChunk.Offset + sourceChunk.UncompressedSize > fileSize)
 						{
 							state.Status = ItemState.ItemStatus.Corrupted;
@@ -233,7 +233,7 @@ public class AppManager
 					if (transferOperation is FileEntry.AuxiliaryEntry.ChunkPatchEntry chunkPatch)
 					{
 						var sourceChunk = sourceManifest.ChunkBuffer[patch!.Chunks[chunkPatch.PatchChunkIndex].SourceChunkIndex];
-						var targetChunk = file.Chunks[chunkPatch.ChunkIndex];
+						var targetChunk = targetManifest.ChunkBuffer[chunkPatch.ChunkIndex];
 						if (targetChunk.UncompressedSize < sourceChunk.UncompressedSize)
 						{
 							var span = new Span<byte>(buffer, 0, targetChunk.UncompressedSize);
@@ -266,17 +266,16 @@ public class AppManager
 				}
 				state.ProgressIndexStack.RemoveAt(transferOpRecLevel);
 			}
-			index -= auxiliaryDir.Files.Count;
-			for (; index < auxiliaryDir.Subdirectories.Count; index++)
+			index -= dir.Files.Count;
+			for (; index < dir.Subdirectories.Count; index++)
 			{
-				var auxiliarySubdir = auxiliaryDir.Subdirectories[index];
-				if (auxiliarySubdir.FilesToRemove.HasValue && auxiliarySubdir.FilesToRemove.Value.Count is 0)
+				var subdir = dir.Subdirectories[index];
+				if (subdir.FilesToRemove.HasValue && subdir.FilesToRemove.Value.Count is 0)
 					continue;
-				var subdir = dir.Subdirectories[auxiliarySubdir.Index];
-				processDir(in subdir, in auxiliarySubdir, Path.Combine(path, subdir.Name), recursionLevel + 1);
+				processDir(in subdir, Path.Combine(path, targetManifest.DirectoryBuffer[subdir.Index].Name), recursionLevel + 1);
 				if (cancellationToken.IsCancellationRequested)
 				{
-					state.ProgressIndexStack[recursionLevel] = auxiliaryDir.Files.Count + index;
+					state.ProgressIndexStack[recursionLevel] = dir.Files.Count + index;
 					return;
 				}
 			}
@@ -292,7 +291,7 @@ public class AppManager
 		ProgressInitiated?.Invoke(ProgressType.Percentage, delta.NumTransferOperations, state.DisplayProgress);
 		if (delta.IntermediateFileSize > 0)
 			intermediateFileHandle = File.OpenHandle(Path.Combine(CdnClient.DownloadsDirectory!, $"{state.Id}.screlocpatchcache"), FileMode.OpenOrCreate, FileAccess.ReadWrite, options: FileOptions.SequentialScan);
-		processDir(in targetManifest.Root, in delta.AuxiliaryTree,localPath, 0);
+		processDir(in delta.AuxiliaryTree, localPath, 0);
 		intermediateFileHandle?.Dispose();
 		if (cancellationToken.IsCancellationRequested)
 		{
@@ -311,7 +310,7 @@ public class AppManager
 	/// <param name="cancellationToken">Token to monitor for cancellation requests.</param>
 	private void RemoveOldFiles(ItemState state, string localPath, DepotManifest sourceManifest, DepotManifest targetManifest, DepotDelta delta, CancellationToken cancellationToken)
 	{
-		void processDir(in DirectoryEntry dir, in DirectoryEntry.AuxiliaryEntry auxiliaryDir, string path, int recursionLevel)
+		void processDir(in DirectoryEntry.AuxiliaryEntry dir, string path, int recursionLevel)
 		{
 			int index;
 			if (state.ProgressIndexStack.Count > recursionLevel)
@@ -321,9 +320,9 @@ public class AppManager
 				state.ProgressIndexStack.Add(0);
 				index = 0;
 			}
-			if (auxiliaryDir.FilesToRemove.HasValue)
+			if (dir.FilesToRemove.HasValue)
 			{
-				var filesToRemove = auxiliaryDir.FilesToRemove.Value;
+				var filesToRemove = dir.FilesToRemove.Value;
 				for (; index < filesToRemove.Count; index++)
 				{
 					if (cancellationToken.IsCancellationRequested)
@@ -334,27 +333,26 @@ public class AppManager
 					File.Delete(Path.Combine(path, sourceManifest.FileBuffer[filesToRemove[index]].Name));
 					ProgressUpdated?.Invoke(++state.DisplayProgress);
 				}
-				index -= auxiliaryDir.Files.Count;
+				index -= dir.Files.Count;
 			}
-			for (; index < auxiliaryDir.Subdirectories.Count; index++)
+			for (; index < dir.Subdirectories.Count; index++)
 			{
 				if (cancellationToken.IsCancellationRequested)
 				{
-					state.ProgressIndexStack[recursionLevel] = auxiliaryDir.Files.Count + index;
+					state.ProgressIndexStack[recursionLevel] = dir.Files.Count + index;
 					return;
 				}
-				var auxiliarySubdir = auxiliaryDir.Subdirectories[index];
-				if (auxiliarySubdir.FilesToRemove.HasValue && auxiliarySubdir.FilesToRemove.Value.Count is 0)
+				var subdir = dir.Subdirectories[index];
+				if (subdir.FilesToRemove.HasValue && subdir.FilesToRemove.Value.Count is 0)
 				{
-					Directory.Delete(Path.Combine(path, sourceManifest.DirectoryBuffer[auxiliarySubdir.Index].Name), true);
+					Directory.Delete(Path.Combine(path, sourceManifest.DirectoryBuffer[subdir.Index].Name), true);
 					ProgressUpdated?.Invoke(++state.DisplayProgress);
 					continue;
 				}
-				var subdir = dir.Subdirectories[auxiliarySubdir.Index];
-				processDir(in subdir, in auxiliarySubdir, Path.Combine(path, subdir.Name), recursionLevel + 1);
+				processDir(in subdir, Path.Combine(path, targetManifest.DirectoryBuffer[subdir.Index].Name), recursionLevel + 1);
 				if (cancellationToken.IsCancellationRequested)
 				{
-					state.ProgressIndexStack[recursionLevel] = auxiliaryDir.Files.Count + index;
+					state.ProgressIndexStack[recursionLevel] = dir.Files.Count + index;
 					return;
 				}
 			}
@@ -368,7 +366,7 @@ public class AppManager
 		}
 		StatusUpdated?.Invoke(Status.RemovingOldFiles);
 		ProgressInitiated?.Invoke(ProgressType.Numeric, delta.NumRemovals, state.DisplayProgress);
-		processDir(in targetManifest.Root, in delta.AuxiliaryTree, localPath, 0);
+		processDir(in delta.AuxiliaryTree, localPath, 0);
 		if (cancellationToken.IsCancellationRequested)
 		{
 			state.SaveToFile();
@@ -385,7 +383,7 @@ public class AppManager
 	{
 		byte[] buffer = GC.AllocateUninitializedArray<byte>(0x100000);
 		SafeFileHandle? chunkBufferFileHandle = null;
-		void writeDir(in DirectoryEntry dir, in DirectoryEntry.AcquisitionEntry acquisitionDir, string downloadPath, string localPath, int recursionLevel)
+		void writeDir(in DirectoryEntry.AcquisitionEntry dir, string downloadPath, string localPath, int recursionLevel)
 		{
 			static long countTotalDirSize(in DirectoryEntry dir)
 			{
@@ -396,10 +394,10 @@ public class AppManager
 					result += countTotalDirSize(in subdir);
 				return result;
 			}
-			if (acquisitionDir.IsNew)
+			if (dir.IsNew)
 			{
 				Directory.Move(downloadPath, localPath);
-				state.DisplayProgress += countTotalDirSize(in dir);
+				state.DisplayProgress += countTotalDirSize(in manifest.DirectoryBuffer[dir.Index]);
 				ProgressUpdated?.Invoke(state.DisplayProgress);
 				return;
 			}
@@ -411,15 +409,15 @@ public class AppManager
 				state.ProgressIndexStack.Add(0);
 				index = 0;
 			}
-			for (; index < acquisitionDir.Files.Count; index++)
+			for (; index < dir.Files.Count; index++)
 			{
 				if (cancellationToken.IsCancellationRequested)
 				{
 					state.ProgressIndexStack[recursionLevel] = index;
 					return;
 				}
-				var acquisitonFile = acquisitionDir.Files[index];
-				var file = dir.Files[acquisitonFile.Index];
+				var acquisitonFile = dir.Files[index];
+				var file = manifest.FileBuffer[acquisitonFile.Index];
 				if (acquisitonFile.Chunks.Count is 0)
 				{
 					string destinationFile = Path.Combine(localPath, file.Name);
@@ -466,7 +464,7 @@ public class AppManager
 							return;
 						}
 						var acquisitionChunk = acquisitonFile.Chunks[chunkIndex];
-						var chunk = file.Chunks[acquisitionChunk.Index];
+						var chunk = manifest.ChunkBuffer[acquisitionChunk.Index];
 						var span = new Span<byte>(buffer, 0, chunk.UncompressedSize);
 						RandomAccess.Read(chunkBufferFileHandle!, span, acquisitionChunk.Offset);
 						RandomAccess.Write(fileHandle, span, chunk.Offset);
@@ -476,15 +474,15 @@ public class AppManager
 					state.ProgressIndexStack.RemoveAt(chunkRecLevel);
 				}
 			}
-			index -= acquisitionDir.Files.Count;
-			for (; index < acquisitionDir.Subdirectories.Count; index++)
+			index -= dir.Files.Count;
+			for (; index < dir.Subdirectories.Count; index++)
 			{
-				var acquisitionSubdir = acquisitionDir.Subdirectories[index];
-				var subdir = dir.Subdirectories[acquisitionSubdir.Index];
-				writeDir(in subdir, in acquisitionSubdir, Path.Combine(downloadPath, subdir.Name), Path.Combine(localPath, subdir.Name), recursionLevel + 1);
+				var subdir = dir.Subdirectories[index];
+				string subdirName = manifest.DirectoryBuffer[subdir.Index].Name;
+				writeDir(in subdir, Path.Combine(downloadPath, subdirName), Path.Combine(localPath, subdirName), recursionLevel + 1);
 				if (cancellationToken.IsCancellationRequested)
 				{
-					state.ProgressIndexStack[recursionLevel] = acquisitionDir.Files.Count + index;
+					state.ProgressIndexStack[recursionLevel] = dir.Files.Count + index;
 					return;
 				}
 			}
@@ -500,7 +498,7 @@ public class AppManager
 		ProgressInitiated?.Invoke(ProgressType.Binary, delta.DownloadCacheSize - delta.IntermediateFileSize, state.DisplayProgress);
 		if (delta.ChunkBufferFileSize > 0)
 			chunkBufferFileHandle = File.OpenHandle(Path.Combine(CdnClient.DownloadsDirectory!, $"{state.Id}.scchunkbuffer"), options: FileOptions.SequentialScan);
-		writeDir(in manifest.Root, in delta.AcquisitionTree, Path.Combine(CdnClient.DownloadsDirectory!, state.Id.ToString()), localPath, 0);
+		writeDir(in delta.AcquisitionTree, Path.Combine(CdnClient.DownloadsDirectory!, state.Id.ToString()), localPath, 0);
 		chunkBufferFileHandle?.Dispose();
 		if (cancellationToken.IsCancellationRequested)
 		{
@@ -524,12 +522,14 @@ public class AppManager
 		var auxiliaryRoot = new DirectoryEntry.AuxiliaryStaging(0);
 		void processDir(in DirectoryEntry sourceDir, in DirectoryEntry targetDir, DirectoryEntry.AcquisitionStaging acquisitionDir, DirectoryEntry.AuxiliaryStaging auxiliaryDir)
 		{
+			int targetDirFileOffset = targetDir.Files.Offset;
 			int i = 0, targetOffset = 0;
 			for (; i < sourceDir.Files.Count && i + targetOffset < targetDir.Files.Count; i++) //Range intersecting both directories
 			{
 				int targetIndex = i + targetOffset;
 				var sourceFile = sourceDir.Files[i];
 				var targetFile = targetDir.Files[targetIndex];
+				targetIndex += targetDirFileOffset;
 				int difference = string.Compare(sourceFile.Name, targetFile.Name, StringComparison.Ordinal);
 				if (difference < 0) //File is present in the source directory but has been removed from the target one
 				{
@@ -547,12 +547,14 @@ public class AppManager
 					bool resized = false;
 					var acquisitionFile = new FileEntry.AcquisitionStaging(targetIndex);
 					var auxiliaryFile = new FileEntry.AuxiliaryStaging(targetIndex);
+					int targetFileChunkOffset = targetFile.Chunks.Offset;
 					int j = 0, targetChunkOffset = 0;
 					for (; j < sourceFile.Chunks.Count && j + targetChunkOffset < targetFile.Chunks.Count; j++) //Range intersecting both files
 					{
 						int targetChunkIndex = j + targetChunkOffset;
 						var sourceChunk = sourceFile.Chunks[j];
 						var targetChunk = targetFile.Chunks[targetChunkIndex];
+						targetChunkIndex += targetFileChunkOffset;
 						int chunkDifference = sourceChunk.Gid.CompareTo(targetChunk.Gid);
 						if (chunkDifference < 0) //Chunk has been removed in target version of the file
 						{
@@ -569,7 +571,7 @@ public class AppManager
 								{
 									SourceChunkIndex = 0,
 									TargetChunkIndex = targetFile.Chunks.Offset + targetChunkIndex,
-									Data = default
+									Data = ReadOnlyMemory<byte>.Empty
 								});
 								if (patchChunkIndex >= 0)
 									auxiliaryFile.ChunkPatches.Add(new()
@@ -602,11 +604,12 @@ public class AppManager
 							acquisitionFile.Chunks.Add(new(j));
 						else
 						{
+							int chunkIndex = targetFileChunkOffset + j;
 							int patchChunkIndex = Array.BinarySearch(patch.Chunks, new PatchChunkEntry
 							{
 								SourceChunkIndex = 0,
-								TargetChunkIndex = targetFile.Chunks.Offset + j,
-								Data = default
+								TargetChunkIndex = chunkIndex,
+								Data = ReadOnlyMemory<byte>.Empty
 							});
 							if (patchChunkIndex >= 0)
 								auxiliaryFile.ChunkPatches.Add(new()
@@ -614,10 +617,10 @@ public class AppManager
 									UseIntermediateFile = true,
 									ChunkIndex = j,
 									PatchChunkIndex = patchChunkIndex,
-									Size = Math.Min(targetFile.Chunks[j].UncompressedSize, sourceManifest.ChunkBuffer[patch.Chunks[patchChunkIndex].SourceChunkIndex].UncompressedSize)
+									Size = Math.Min(targetManifest.ChunkBuffer[chunkIndex].UncompressedSize, sourceManifest.ChunkBuffer[patch.Chunks[patchChunkIndex].SourceChunkIndex].UncompressedSize)
 								});
 							else
-								acquisitionFile.Chunks.Add(new(j));
+								acquisitionFile.Chunks.Add(new(chunkIndex));
 						}
 					}
 					if (acquisitionFile.Chunks.Count > 0)
@@ -630,10 +633,10 @@ public class AppManager
 					{
 						var chunkPatches = auxiliaryFile.ChunkPatches;
 						var relocations = auxiliaryFile.Relocations;
-						//Batch relocation operations to reduce CPU load when computing weights and number of IO requests
+						//Batch relocation operations to reduce the number of IO requests and the CPU load when computing weights
 						if (relocations.Count > 0)
 						{
-							relocations.Sort((a, b) => a.SourceOffset.CompareTo(b.SourceOffset));
+							relocations.Sort();
 							for (int k = 0; k < relocations.Count; k++)
 							{
 								var reloc = relocations[k];
@@ -764,18 +767,21 @@ public class AppManager
 					auxiliaryDir.FilesToRemove.Add(fileIndex++);
 			}
 			for (int j = i + targetOffset; j < targetDir.Files.Count; j++) //Add remaining files that are unique to the target directory
-				acquisitionDir.Files.Add(new(j));
+				acquisitionDir.Files.Add(new(targetDirFileOffset + j));
 			static void addSubdir(DirectoryEntry.AcquisitionStaging acquisitionDir, in DirectoryEntry subdir, int subdirIndex)
 			{
 				var acquisitionSubdir = new DirectoryEntry.AcquisitionStaging(subdirIndex, true);
 				acquisitionSubdir.Files.Capacity = subdir.Files.Count;
+				int subdirFileOffset = subdir.Files.Offset;
 				for (int i = 0; i < subdir.Files.Count; i++)
-					acquisitionSubdir.Files.Add(new(i));
+					acquisitionSubdir.Files.Add(new(subdirFileOffset + i));
 				acquisitionSubdir.Subdirectories.Capacity = subdir.Subdirectories.Count;
+				int subdirSubdirOffset = subdir.Subdirectories.Offset;
 				for (int i = 0; i < subdir.Subdirectories.Count; i++)
-					addSubdir(acquisitionSubdir, subdir.Subdirectories[i], i);
+					addSubdir(acquisitionSubdir, subdir.Subdirectories[i], subdirSubdirOffset + i);
 				acquisitionDir.Subdirectories.Add(acquisitionSubdir);
 			}
+			int targetDirSubdirOffset = targetDir.Subdirectories.Offset;
 			i = 0;
 			targetOffset = 0;
 			for (; i < sourceDir.Subdirectories.Count && i + targetOffset < targetDir.Subdirectories.Count; i++) //Range intersecting both directories
@@ -783,6 +789,7 @@ public class AppManager
 				int targetIndex = i + targetOffset;
 				var sourceSubdir = sourceDir.Subdirectories[i];
 				var targetSubdir = targetDir.Subdirectories[targetIndex];
+				targetIndex += targetDirSubdirOffset;
 				int difference = string.Compare(sourceSubdir.Name, targetSubdir.Name, StringComparison.Ordinal);
 				if (difference < 0) //Subdirectory is present in the source directory but has been removed from the target one
 				{
@@ -810,11 +817,11 @@ public class AppManager
 			if (numRemainingSubdirs > 0) //Remove remaining subdirectories that are unique to the source directory
 			{
 				int subdirIndex = sourceDir.Subdirectories.Offset + i;
-				for (int j = 0; j < numRemainingFiles; j++)
+				for (int j = 0; j < numRemainingSubdirs; j++)
 					auxiliaryDir.Subdirectories.Add(new(subdirIndex++) { FilesToRemove = [] });
 			}
 			for (int j = i + targetOffset; j < targetDir.Subdirectories.Count; j++) //Add remaining subdirectories that are unique to the target directory
-				addSubdir(acquisitionDir, targetDir.Subdirectories[j], j);
+				addSubdir(acquisitionDir, targetDir.Subdirectories[j], targetDirSubdirOffset + j);
 		}
 		processDir(in sourceManifest.Root, in targetManifest.Root, acquisitionRoot, auxiliaryRoot);
 		return new(targetManifest, acquisitionRoot, auxiliaryRoot);
@@ -836,12 +843,12 @@ public class AppManager
 			for (int i = 0; i < files.Count; i++)
 			{
 				state.DisplayProgress += files[i].Size;
-				stagingDir.Files.Add(new(i));
+				stagingDir.Files.Add(new(files.Offset + i));
 			}
 			var subdirs = directory.Subdirectories;
 			for (int i = 0; i < subdirs.Count; i++)
 			{
-				var stagingSubDir = new DirectoryEntry.AcquisitionStaging(i, true);
+				var stagingSubDir = new DirectoryEntry.AcquisitionStaging(subdirs.Offset + i, true);
 				copyDirToStagingAndCount(subdirs[i], stagingSubDir);
 				stagingDir.Subdirectories.Add(stagingSubDir);
 			}
@@ -875,6 +882,7 @@ public class AppManager
 				index = 0;
 				continueType = 0;
 			}
+			int dirFileOffset = directory.Files.Offset;
 			for (; index < directory.Files.Count; index++)
 			{
 				if (cancellationToken.IsCancellationRequested)
@@ -882,18 +890,19 @@ public class AppManager
 					state.ProgressIndexStack[recursionLevel] = index;
 					return;
 				}
+				int absFileIndex = dirFileOffset + index;
 				var file = directory.Files[index];
 				string filePath = Path.Combine(path, file.Name);
 				if (!File.Exists(filePath))
 				{
-					stagingDir.Files.Add(new(index));
+					stagingDir.Files.Add(new(absFileIndex));
 					cache.FilesMissing++;
 					state.DisplayProgress += file.Size;
 					ProgressUpdated?.Invoke(state.DisplayProgress);
 					ValidationCounterUpdated?.Invoke(cache.FilesMissing, ValidationCounterType.Missing);
 					continue;
 				}
-				var stagingFile = continueType is 1 ? (stagingDir.Files.Find(f => f.Index == index) ?? new FileEntry.AcquisitionStaging(index)) : new FileEntry.AcquisitionStaging(index);
+				var stagingFile = continueType is 1 ? (stagingDir.Files.Find(f => f.Index == absFileIndex) ?? new FileEntry.AcquisitionStaging(absFileIndex)) : new FileEntry.AcquisitionStaging(absFileIndex);
 				using var fileHandle = File.OpenHandle(filePath, options: FileOptions.RandomAccess);
 				int chunkRecLevel = recursionLevel + 1;
 				int chunkIndex;
@@ -907,6 +916,7 @@ public class AppManager
 				long fileSize = RandomAccess.GetLength(fileHandle);
 				var chunks = file.Chunks;
 				var span = new Span<byte>(buffer);
+				int fileChunkOffset = chunks.Offset;
 				for (; chunkIndex < chunks.Count; chunkIndex++)
 				{
 					if (cancellationToken.IsCancellationRequested)
@@ -915,15 +925,16 @@ public class AppManager
 						state.ProgressIndexStack[recursionLevel] = index;
 						return;
 					}
+					int absChunkIndex = fileChunkOffset + chunkIndex;
 					var chunk = chunks[chunkIndex];
 					if (chunk.Offset + chunk.UncompressedSize > fileSize)
-						stagingFile.Chunks.Add(new(chunkIndex));
+						stagingFile.Chunks.Add(new(absChunkIndex));
 					else
 					{
 						var chunkSpan = span[..chunk.UncompressedSize];
 						RandomAccess.Read(fileHandle, chunkSpan, chunk.Offset);
 						if (Adler.ComputeChecksum(chunkSpan) != chunk.Checksum)
-							stagingFile.Chunks.Add(new(chunkIndex));
+							stagingFile.Chunks.Add(new(absChunkIndex));
 					}
 					state.DisplayProgress += chunk.UncompressedSize;
 					ProgressUpdated?.Invoke(state.DisplayProgress);
@@ -940,10 +951,12 @@ public class AppManager
 					ValidationCounterUpdated?.Invoke(++cache.FilesMatching, ValidationCounterType.Matching);
 			}
 			index -= directory.Files.Count;
+			int dirSubdirOffset = directory.Subdirectories.Offset;
 			for (; index < directory.Subdirectories.Count; index++)
 			{
+				int absSubdirIndex = dirSubdirOffset + index;
 				var subdir = directory.Subdirectories[index];
-				var stagingSubdir = continueType is 2 ? (stagingDir.Subdirectories.Find(sd => sd.Index == index) ?? new DirectoryEntry.AcquisitionStaging(index, false)) : new DirectoryEntry.AcquisitionStaging(index, false);
+				var stagingSubdir = continueType is 2 ? (stagingDir.Subdirectories.Find(sd => sd.Index == absSubdirIndex) ?? new DirectoryEntry.AcquisitionStaging(absSubdirIndex, false)) : new DirectoryEntry.AcquisitionStaging(absSubdirIndex, false);
 				validateDir(in subdir, stagingSubdir, Path.Combine(path, subdir.Name), recursionLevel + 1);	
 				if (continueType is 2)
 					continueType = 0;

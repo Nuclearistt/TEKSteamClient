@@ -14,7 +14,7 @@ public readonly struct DirectoryEntry
 	{
 		/// <summary>Indicates whether directory has been added or modifed.</summary>
 		public required bool IsNew { get; init; }
-		/// <summary>Index of the directory entry in its parent directory.</summary>
+		/// <summary>Index of the directory entry in <see cref="DepotManifest.DirectoryBuffer"/>.</summary>
 		public required int Index { get; init; }
 		/// <summary>Directory's file entries.</summary>
 		public required ArraySegment<FileEntry.AcquisitionEntry> Files { get; init; }
@@ -24,7 +24,7 @@ public readonly struct DirectoryEntry
 	/// <summary>Structure used in <see cref="DepotDelta"/> to store auxiliary data like patched chunks and relocations for files or removed items.</summary>
 	internal readonly struct AuxiliaryEntry
 	{
-		/// <summary>Index of the directory entry in its parent directory, or in source manifest directory buffer if <see cref="FilesToRemove"/> is empty.</summary>
+		/// <summary>Index of the directory entry in <see cref="DepotManifest.DirectoryBuffer"/>. If <see cref="FilesToRemove"/> is empty, the index is for source manifest.</summary>
 		public required int Index { get; init; }
 		/// <summary>Indexes of the files that must be removed. If empty, the directory with all its contents is removed instead.</summary>
 		public ArraySegment<int>? FilesToRemove { get; init; }
@@ -37,7 +37,7 @@ public readonly struct DirectoryEntry
 	internal class AcquisitionStaging
 	{
 		/// <summary>Creates an empty staging directory entry with specified index.</summary>
-		/// <param name="index">Index of the directory entry in its parent directory.</param>
+		/// <param name="index">Index of the directory entry in <see cref="DepotManifest.DirectoryBuffer"/>.</param>
 		/// <param name="isNew">Value indicating whether directory has been added or modifed.</param>
 		public AcquisitionStaging(int index, bool isNew)
 		{
@@ -64,7 +64,7 @@ public readonly struct DirectoryEntry
 		}
 		/// <summary>Indicates whether directory has been added or modifed.</summary>
 		public bool IsNew { get; internal set; }
-		/// <summary>Index of the directory entry in its parent directory.</summary>
+		/// <summary>Index of the directory entry in <see cref="DepotManifest.DirectoryBuffer"/>.</summary>
 		public int Index { get; }
 		/// <summary>Directory's file entries.</summary>
 		public List<FileEntry.AcquisitionStaging> Files { get; }
@@ -90,7 +90,7 @@ public readonly struct DirectoryEntry
 	/// <param name="index">Index of the directory entry in its parent directory.</param>
 	internal class AuxiliaryStaging(int index)
 	{
-		/// <summary>Index of the directory entry in its parent directory, or in source manifest directory buffer if <see cref="FilesToRemove"/> is empty.</summary>
+		/// <summary>Index of the directory entry in <see cref="DepotManifest.DirectoryBuffer"/>. If <see cref="FilesToRemove"/> is empty, the index is for source manifest.</summary>
 		public int Index { get; } = index;
 		/// <summary>Indexes of the files that must be removed. If empty, the directory with all its contents is removed instead.</summary>
 		public List<int>? FilesToRemove { get; set; }

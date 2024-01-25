@@ -152,7 +152,7 @@ public class CDNClient
 		string? chunkBufferFilePath = null;
 		LimitedUseFileHandle? chunkBufferFileHandle = null;
 		string baseRequestUrl = $"depot/{state.Id.DepotId}/chunk/";
-		void downloadDir(in DirectoryEntry dir, in DirectoryEntry.AcquisitionEntry acquisitionDir, string path, int recursionLevel)
+		void downloadDir(in DirectoryEntry.AcquisitionEntry dir, string path, int recursionLevel)
 		{
 			int index;
 			if (state.ProgressIndexStack.Count > recursionLevel)
@@ -162,10 +162,10 @@ public class CDNClient
 				state.ProgressIndexStack.Add(0);
 				index = 0;
 			}
-			for (; index < acquisitionDir.Files.Count; index++)
+			for (; index < dir.Files.Count; index++)
 			{
-				var acquisitonFile = acquisitionDir.Files[index];
-				var file = dir.Files[acquisitonFile.Index];
+				var acquisitonFile = dir.Files[index];
+				var file = manifest.FileBuffer[acquisitonFile.Index];
 				if (file.Size is 0)
 					continue;
 				if (linkedCts.IsCancellationRequested)
@@ -182,10 +182,10 @@ public class CDNClient
 					state.ProgressIndexStack.Add(0);
 					chunkIndex = 0;
 				}
-				var chunks = file.Chunks;
 				if (acquisitonFile.Chunks.Count is 0)
 				{
 					string filePath = Path.Combine(path, file.Name);
+					var chunks = file.Chunks;
 					LimitedUseFileHandle? handle;
 					if (numResumedContexts > 0)
 					{
@@ -275,7 +275,7 @@ public class CDNClient
 							return;
 						}
 						var acquisitionChunk = acquisitionChunks[chunkIndex];
-						var chunk = chunks[acquisitionChunk.Index];
+						var chunk = manifest.ChunkBuffer[acquisitionChunk.Index];
 						int contextIndex = -1;
 						for (int i = 0; i < contexts.Length; i++)
 						{
@@ -332,15 +332,14 @@ public class CDNClient
 				}
 				state.ProgressIndexStack.RemoveAt(chunkRecLevel);
 			}
-			index -= acquisitionDir.Files.Count;
-			for (; index < acquisitionDir.Subdirectories.Count; index++)
+			index -= dir.Files.Count;
+			for (; index < dir.Subdirectories.Count; index++)
 			{
-				var acquisitionSubdir = acquisitionDir.Subdirectories[index];
-				var subdir = dir.Subdirectories[acquisitionSubdir.Index];
-				downloadDir(in subdir, in acquisitionSubdir, Path.Combine(path, subdir.Name), recursionLevel + 1);
+				var subdir = dir.Subdirectories[index];
+				downloadDir(in subdir, Path.Combine(path, manifest.DirectoryBuffer[subdir.Index].Name), recursionLevel + 1);
 				if (linkedCts.IsCancellationRequested)
 				{
-					state.ProgressIndexStack[recursionLevel] = acquisitionDir.Files.Count + index;
+					state.ProgressIndexStack[recursionLevel] = dir.Files.Count + index;
 					return;
 				}
 			}
@@ -411,7 +410,7 @@ public class CDNClient
 			for (int i = 0; i < numResumedContexts; i++)
 				tasks[i] = Task.Factory.StartNew(AcquireChunk, contexts[i], TaskCreationOptions.DenyChildAttach);
 		}
-		downloadDir(in manifest.Root, in delta.AcquisitionTree, Path.Combine(DownloadsDirectory!, state.Id.ToString()), 0);
+		downloadDir(in delta.AcquisitionTree, Path.Combine(DownloadsDirectory!, state.Id.ToString()), 0);
 		foreach (var task in tasks)
 		{
 			if (task is null)
@@ -458,7 +457,7 @@ public class CDNClient
 	/// <param name="cancellationToken">Token to monitor for cancellation requests.</param>
 	internal void Preallocate(ItemState state, DepotManifest manifest, DepotDelta delta, CancellationToken cancellationToken)
 	{
-		void preallocDir(in DirectoryEntry dir, in DirectoryEntry.AcquisitionEntry acquisitionDir, string path, int recursionLevel)
+		void preallocDir(in DirectoryEntry.AcquisitionEntry dir, string path, int recursionLevel)
 		{
 			int index;
 			if (state.ProgressIndexStack.Count > recursionLevel)
@@ -467,12 +466,12 @@ public class CDNClient
 			{
 				state.ProgressIndexStack.Add(0);
 				index = 0;
-				if (acquisitionDir.IsNew || acquisitionDir.Files.Any(a => a.Chunks.Count is 0))
+				if (dir.IsNew || dir.Files.Any(a => a.Chunks.Count is 0))
 					Directory.CreateDirectory(path);
 			}
-			for (; index < acquisitionDir.Files.Count; index++)
+			for (; index < dir.Files.Count; index++)
 			{
-				var acquisitonFile = acquisitionDir.Files[index];
+				var acquisitonFile = dir.Files[index];
 				if (acquisitonFile.Chunks.Count is not 0)
 					continue;
 				if (cancellationToken.IsCancellationRequested)
@@ -480,21 +479,20 @@ public class CDNClient
 					state.ProgressIndexStack[recursionLevel] = index;
 					return;
 				}
-				var file = dir.Files[acquisitonFile.Index];
+				var file = manifest.FileBuffer[acquisitonFile.Index];
 				var handle = File.OpenHandle(Path.Combine(path, file.Name), FileMode.Create, FileAccess.Write, preallocationSize: file.Size);
 				RandomAccess.SetLength(handle, file.Size);
 				handle.Dispose();
 				ProgressUpdated?.Invoke(++state.DisplayProgress);
 			}
-			index -= acquisitionDir.Files.Count;
-			for (; index < acquisitionDir.Subdirectories.Count; index++)
+			index -= dir.Files.Count;
+			for (; index < dir.Subdirectories.Count; index++)
 			{
-				var acquisitionSubdir = acquisitionDir.Subdirectories[index];
-				var subdir = dir.Subdirectories[acquisitionSubdir.Index];
-				preallocDir(in subdir, in acquisitionSubdir, Path.Combine(path, subdir.Name), recursionLevel + 1);
+				var subdir = dir.Subdirectories[index];
+				preallocDir(in subdir, Path.Combine(path, manifest.DirectoryBuffer[subdir.Index].Name), recursionLevel + 1);
 				if (cancellationToken.IsCancellationRequested)
 				{
-					state.ProgressIndexStack[recursionLevel] = acquisitionDir.Files.Count + index;
+					state.ProgressIndexStack[recursionLevel] = dir.Files.Count + index;
 					return;
 				}
 			}
@@ -510,7 +508,7 @@ public class CDNClient
 		if (new DriveInfo(DownloadsDirectory!).AvailableFreeSpace < delta.DownloadCacheSize)
 			throw new SteamNotEnoughDiskSpaceException(delta.DownloadCacheSize);
 		ProgressInitiated?.Invoke(ProgressType.Numeric, delta.NumDownloadFiles, state.DisplayProgress);
-		preallocDir(in manifest.Root, in delta.AcquisitionTree, Path.Combine(DownloadsDirectory!, state.Id.ToString()), 0);
+		preallocDir(in delta.AcquisitionTree, Path.Combine(DownloadsDirectory!, state.Id.ToString()), 0);
 		if (cancellationToken.IsCancellationRequested)
 		{
 			state.SaveToFile();
