@@ -20,12 +20,12 @@ public class AppManager
 	{
 		AppId = appId;
 		InstallationPath = installationPath;
-		_scDataPath = Path.Combine(installationPath, "SCData");
-		WorkshopContentPath = workshopContentPath ?? Path.Combine(_scDataPath, "Workshop");
+		_scDataPath = Path.Join(installationPath, "SCData");
+		WorkshopContentPath = workshopContentPath ?? Path.Join(_scDataPath, "Workshop");
 		CdnClient = new()
 		{
-			DownloadsDirectory = Path.Combine(_scDataPath, "Downloads"),
-			ManifestsDirectory = Path.Combine(_scDataPath, "Manifests"),
+			DownloadsDirectory = Path.Join(_scDataPath, "Downloads"),
+			ManifestsDirectory = Path.Join(_scDataPath, "Manifests"),
 			CmClient = CmClient
 		};
 		CdnClient.ProgressInitiated += (type, totalValue, initialValue) => ProgressInitiated?.Invoke(type, totalValue, initialValue);
@@ -72,7 +72,7 @@ public class AppManager
 	/// <param name="cancellationToken">Token to monitor for cancellation requests.</param>
 	private void Commit(ItemState state, DepotManifest? sourceManifest, DepotManifest targetManifest, DepotPatch? patch, DepotDelta delta, CancellationToken cancellationToken)
 	{
-		string localPath = state.Id.WorkshopItemId is 0 ? InstallationPath : Path.Combine(WorkshopContentPath, state.Id.WorkshopItemId.ToString());
+		string localPath = state.Id.WorkshopItemId is 0 ? InstallationPath : Path.Join(WorkshopContentPath, state.Id.WorkshopItemId.ToString());
 		if (state.Status <= ItemState.ItemStatus.Patching && delta.NumTransferOperations > 0)
 			PatchAndRelocateChunks(state, localPath, sourceManifest!, targetManifest, patch, delta, cancellationToken);
 		if (state.Status <= ItemState.ItemStatus.WritingNewData)
@@ -115,7 +115,7 @@ public class AppManager
 					return;
 				}
 				var file = targetManifest.FileBuffer[auxiliaryFile.Index];
-				string filePath = Path.Combine(path, file.Name);
+				string filePath = Path.Join(path, file.Name);
 				var attributes = File.GetAttributes(filePath);
 				if (attributes.HasFlag(FileAttributes.ReadOnly))
 					File.SetAttributes(filePath, attributes & ~FileAttributes.ReadOnly);
@@ -272,7 +272,7 @@ public class AppManager
 				var subdir = dir.Subdirectories[index];
 				if (subdir.FilesToRemove.HasValue && subdir.FilesToRemove.Value.Count is 0)
 					continue;
-				processDir(in subdir, Path.Combine(path, targetManifest.DirectoryBuffer[subdir.Index].Name), recursionLevel + 1);
+				processDir(in subdir, Path.Join(path, targetManifest.DirectoryBuffer[subdir.Index].Name), recursionLevel + 1);
 				if (cancellationToken.IsCancellationRequested)
 				{
 					state.ProgressIndexStack[recursionLevel] = dir.Files.Count + index;
@@ -290,7 +290,7 @@ public class AppManager
 		StatusUpdated?.Invoke(Status.Patching);
 		ProgressInitiated?.Invoke(ProgressType.Percentage, delta.NumTransferOperations, state.DisplayProgress);
 		if (delta.IntermediateFileSize > 0)
-			intermediateFileHandle = File.OpenHandle(Path.Combine(CdnClient.DownloadsDirectory!, $"{state.Id}.screlocpatchcache"), FileMode.OpenOrCreate, FileAccess.ReadWrite, options: FileOptions.SequentialScan);
+			intermediateFileHandle = File.OpenHandle(Path.Join(CdnClient.DownloadsDirectory!, $"{state.Id}.screlocpatchcache"), FileMode.OpenOrCreate, FileAccess.ReadWrite, options: FileOptions.SequentialScan);
 		processDir(in delta.AuxiliaryTree, localPath, 0);
 		intermediateFileHandle?.Dispose();
 		if (cancellationToken.IsCancellationRequested)
@@ -299,7 +299,7 @@ public class AppManager
 			throw new OperationCanceledException(cancellationToken);
 		}
 		if (delta.IntermediateFileSize > 0)
-			File.Delete(Path.Combine(CdnClient.DownloadsDirectory!, $"{state.Id}.screlocpatchcache"));
+			File.Delete(Path.Join(CdnClient.DownloadsDirectory!, $"{state.Id}.screlocpatchcache"));
 	}
 	/// <summary>Deletes files and directories that have been removed from the target manifest.</summary>
 	/// <param name="state">State of the item.</param>
@@ -330,7 +330,7 @@ public class AppManager
 						state.ProgressIndexStack[recursionLevel] = index;
 						return;
 					}
-					File.Delete(Path.Combine(path, sourceManifest.FileBuffer[filesToRemove[index]].Name));
+					File.Delete(Path.Join(path, sourceManifest.FileBuffer[filesToRemove[index]].Name));
 					ProgressUpdated?.Invoke(++state.DisplayProgress);
 				}
 				index -= dir.Files.Count;
@@ -345,11 +345,11 @@ public class AppManager
 				var subdir = dir.Subdirectories[index];
 				if (subdir.FilesToRemove.HasValue && subdir.FilesToRemove.Value.Count is 0)
 				{
-					Directory.Delete(Path.Combine(path, sourceManifest.DirectoryBuffer[subdir.Index].Name), true);
+					Directory.Delete(Path.Join(path, sourceManifest.DirectoryBuffer[subdir.Index].Name), true);
 					ProgressUpdated?.Invoke(++state.DisplayProgress);
 					continue;
 				}
-				processDir(in subdir, Path.Combine(path, targetManifest.DirectoryBuffer[subdir.Index].Name), recursionLevel + 1);
+				processDir(in subdir, Path.Join(path, targetManifest.DirectoryBuffer[subdir.Index].Name), recursionLevel + 1);
 				if (cancellationToken.IsCancellationRequested)
 				{
 					state.ProgressIndexStack[recursionLevel] = dir.Files.Count + index;
@@ -420,10 +420,10 @@ public class AppManager
 				var file = manifest.FileBuffer[acquisitonFile.Index];
 				if (acquisitonFile.Chunks.Count is 0)
 				{
-					string destinationFile = Path.Combine(localPath, file.Name);
+					string destinationFile = Path.Join(localPath, file.Name);
 					if (File.Exists(destinationFile))
 						File.Delete(destinationFile);
-					File.Move(Path.Combine(downloadPath, file.Name), destinationFile);
+					File.Move(Path.Join(downloadPath, file.Name), destinationFile);
 					if (file.Flags is not 0)
 					{
 						var attributes = (FileAttributes)0;
@@ -450,7 +450,7 @@ public class AppManager
 						state.ProgressIndexStack.Add(0);
 						chunkIndex = 0;
 					}
-					string filePath = Path.Combine(localPath, file.Name);
+					string filePath = Path.Join(localPath, file.Name);
 					var attributes = File.GetAttributes(filePath);
 					if (attributes.HasFlag(FileAttributes.ReadOnly))
 						File.SetAttributes(filePath, attributes & ~FileAttributes.ReadOnly);
@@ -479,7 +479,7 @@ public class AppManager
 			{
 				var subdir = dir.Subdirectories[index];
 				string subdirName = manifest.DirectoryBuffer[subdir.Index].Name;
-				writeDir(in subdir, Path.Combine(downloadPath, subdirName), Path.Combine(localPath, subdirName), recursionLevel + 1);
+				writeDir(in subdir, Path.Join(downloadPath, subdirName), Path.Join(localPath, subdirName), recursionLevel + 1);
 				if (cancellationToken.IsCancellationRequested)
 				{
 					state.ProgressIndexStack[recursionLevel] = dir.Files.Count + index;
@@ -497,19 +497,19 @@ public class AppManager
 		StatusUpdated?.Invoke(Status.WritingNewData);
 		ProgressInitiated?.Invoke(ProgressType.Binary, delta.DownloadCacheSize - delta.IntermediateFileSize, state.DisplayProgress);
 		if (delta.ChunkBufferFileSize > 0)
-			chunkBufferFileHandle = File.OpenHandle(Path.Combine(CdnClient.DownloadsDirectory!, $"{state.Id}.scchunkbuffer"), options: FileOptions.SequentialScan);
-		writeDir(in delta.AcquisitionTree, Path.Combine(CdnClient.DownloadsDirectory!, state.Id.ToString()), localPath, 0);
+			chunkBufferFileHandle = File.OpenHandle(Path.Join(CdnClient.DownloadsDirectory!, $"{state.Id}.scchunkbuffer"), options: FileOptions.SequentialScan);
+		writeDir(in delta.AcquisitionTree, Path.Join(CdnClient.DownloadsDirectory!, state.Id.ToString()), localPath, 0);
 		chunkBufferFileHandle?.Dispose();
 		if (cancellationToken.IsCancellationRequested)
 		{
 			state.SaveToFile();
 			throw new OperationCanceledException(cancellationToken);
 		}
-		string downloadDirPath = Path.Combine(CdnClient.DownloadsDirectory!, state.Id.ToString());
+		string downloadDirPath = Path.Join(CdnClient.DownloadsDirectory!, state.Id.ToString());
 		if (Directory.Exists(downloadDirPath))
 			Directory.Delete(downloadDirPath, true);
 		if (delta.ChunkBufferFileSize > 0)
-			File.Delete(Path.Combine(CdnClient.DownloadsDirectory!, $"{state.Id}.scchunkbuffer"));
+			File.Delete(Path.Join(CdnClient.DownloadsDirectory!, $"{state.Id}.scchunkbuffer"));
 	}
 	/// <summary>Computes difference between source and target manifests' contents</summary>
 	/// <param name="sourceManifest">Source manifest to compute difference from.</param>
@@ -833,7 +833,7 @@ public class AppManager
 	/// <returns>Depot delta object containing index tree for missing chunks.</returns>
 	private DepotDelta Validate(ItemState state, DepotManifest manifest, CancellationToken cancellationToken)
 	{
-		string cachePath = Path.Combine(CdnClient.DownloadsDirectory!, $"{manifest.Item}-{manifest.Id}.scvcache");
+		string cachePath = Path.Join(CdnClient.DownloadsDirectory!, $"{manifest.Item}-{manifest.Id}.scvcache");
 		var cache = File.Exists(cachePath) ? new ValidationCache(cachePath) : new();
 		byte[] buffer = GC.AllocateUninitializedArray<byte>(0x100000);
 		void copyDirToStagingAndCount(in DirectoryEntry directory, DirectoryEntry.AcquisitionStaging stagingDir)
@@ -892,7 +892,7 @@ public class AppManager
 				}
 				int absFileIndex = dirFileOffset + index;
 				var file = directory.Files[index];
-				string filePath = Path.Combine(path, file.Name);
+				string filePath = Path.Join(path, file.Name);
 				if (!File.Exists(filePath))
 				{
 					stagingDir.Files.Add(new(absFileIndex));
@@ -957,7 +957,7 @@ public class AppManager
 				int absSubdirIndex = dirSubdirOffset + index;
 				var subdir = directory.Subdirectories[index];
 				var stagingSubdir = continueType is 2 ? (stagingDir.Subdirectories.Find(sd => sd.Index == absSubdirIndex) ?? new DirectoryEntry.AcquisitionStaging(absSubdirIndex, false)) : new DirectoryEntry.AcquisitionStaging(absSubdirIndex, false);
-				validateDir(in subdir, stagingSubdir, Path.Combine(path, subdir.Name), recursionLevel + 1);	
+				validateDir(in subdir, stagingSubdir, Path.Join(path, subdir.Name), recursionLevel + 1);	
 				if (continueType is 2)
 					continueType = 0;
 				else if (stagingSubdir.IsNew || stagingSubdir.Files.Count > 0 || stagingSubdir.Subdirectories.Count > 0)
@@ -971,7 +971,7 @@ public class AppManager
 			state.ProgressIndexStack.RemoveAt(recursionLevel);
 			return;
 		}
-		string basePath = state.Id.WorkshopItemId is 0 ? InstallationPath : Path.Combine(WorkshopContentPath, state.Id.WorkshopItemId.ToString());
+		string basePath = state.Id.WorkshopItemId is 0 ? InstallationPath : Path.Join(WorkshopContentPath, state.Id.WorkshopItemId.ToString());
 		if (state.Status is not ItemState.ItemStatus.Validating)
 		{
 			state.Status = ItemState.ItemStatus.Validating;
@@ -1012,7 +1012,7 @@ public class AppManager
 					targetManifestId = CmClient.GetWorkshopItemManifestId(AppId, item.WorkshopItemId);
 			}
 		}
-		var state = new ItemState(item, Path.Combine(_scDataPath, $"{item}.scitemstate"));
+		var state = new ItemState(item, Path.Join(_scDataPath, $"{item}.scitemstate"));
 		if (state.CurrentManifestId is 0)
 			return Validate(item, cancellationToken, targetManifestId); //Cannot update when source version is unknown
 		if (state.CurrentManifestId == targetManifestId)
@@ -1022,7 +1022,7 @@ public class AppManager
 		var patch = CmClient.GetPatchAvailability(AppId, item.DepotId, sourceManifest.Id, targetManifest.Id)
 			? CdnClient.GetPatch(AppId, item, sourceManifest, targetManifest, cancellationToken)
 			: null;
-		string deltaFilePath = Path.Combine(CdnClient.DownloadsDirectory!, $"{item}-{sourceManifest.Id}-{targetManifest.Id}.scdelta");
+		string deltaFilePath = Path.Join(CdnClient.DownloadsDirectory!, $"{item}-{sourceManifest.Id}-{targetManifest.Id}.scdelta");
 		DepotDelta delta;
 		if (state.Status < ItemState.ItemStatus.Preallocating)
 		{
@@ -1043,7 +1043,7 @@ public class AppManager
 		state.SaveToFile();
 		File.Delete(deltaFilePath);
 		if (patch is not null)
-			File.Delete(Path.Combine(CdnClient.DownloadsDirectory!, $"{item}-{sourceManifest.Id}-{targetManifest.Id}.scpatch"));
+			File.Delete(Path.Join(CdnClient.DownloadsDirectory!, $"{item}-{sourceManifest.Id}-{targetManifest.Id}.scpatch"));
 		return false;
 	}
 	/// <summary>Verifies item files, downloads and installs missing data.</summary>
@@ -1067,9 +1067,9 @@ public class AppManager
 					manifestId = CmClient.GetWorkshopItemManifestId(AppId, item.WorkshopItemId);
 			}
 		}
-		var state = new ItemState(item, Path.Combine(_scDataPath, $"{item}.scitemstate"));
+		var state = new ItemState(item, Path.Join(_scDataPath, $"{item}.scitemstate"));
 		var manifest = CdnClient.GetManifest(AppId, item, manifestId, cancellationToken);
-		string deltaFilePath = Path.Combine(CdnClient.DownloadsDirectory!, $"{item}-{manifestId}.scdelta");
+		string deltaFilePath = Path.Join(CdnClient.DownloadsDirectory!, $"{item}-{manifestId}.scdelta");
 		DepotDelta delta;
 		if (state.Status <= ItemState.ItemStatus.Validating)
 		{

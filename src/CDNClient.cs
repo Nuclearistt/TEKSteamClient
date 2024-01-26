@@ -184,7 +184,7 @@ public class CDNClient
 				}
 				if (acquisitonFile.Chunks.Count is 0)
 				{
-					string filePath = Path.Combine(path, file.Name);
+					string filePath = Path.Join(path, file.Name);
 					var chunks = file.Chunks;
 					LimitedUseFileHandle? handle;
 					if (numResumedContexts > 0)
@@ -336,7 +336,7 @@ public class CDNClient
 			for (; index < dir.Subdirectories.Count; index++)
 			{
 				var subdir = dir.Subdirectories[index];
-				downloadDir(in subdir, Path.Combine(path, manifest.DirectoryBuffer[subdir.Index].Name), recursionLevel + 1);
+				downloadDir(in subdir, Path.Join(path, manifest.DirectoryBuffer[subdir.Index].Name), recursionLevel + 1);
 				if (linkedCts.IsCancellationRequested)
 				{
 					state.ProgressIndexStack[recursionLevel] = dir.Files.Count + index;
@@ -369,11 +369,11 @@ public class CDNClient
 			contexts[i] = new(threadSafeProgress, httpClients[i % httpClients.Length], linkedCts.Token);
 			contexts[i].Aes.Key = decryptionKey;
 		}
-		string dwContextsFilePath = Path.Combine(DownloadsDirectory!, $"{state.Id}.scdwcontexts");
+		string dwContextsFilePath = Path.Join(DownloadsDirectory!, $"{state.Id}.scdwcontexts");
 		ProgressInitiated?.Invoke(ProgressType.Binary, delta.DownloadSize, state.DisplayProgress);
 		if (delta.ChunkBufferFileSize > 0)
 		{
-			chunkBufferFilePath = Path.Combine(DownloadsDirectory!, $"{state.Id}.scchunkbuffer");
+			chunkBufferFilePath = Path.Join(DownloadsDirectory!, $"{state.Id}.scchunkbuffer");
 			chunkBufferFileHandle = new(File.OpenHandle(chunkBufferFilePath, FileMode.OpenOrCreate, FileAccess.Write, options: FileOptions.RandomAccess | FileOptions.Asynchronous), int.MaxValue);
 		}
 		if (File.Exists(dwContextsFilePath))
@@ -410,7 +410,7 @@ public class CDNClient
 			for (int i = 0; i < numResumedContexts; i++)
 				tasks[i] = Task.Factory.StartNew(AcquireChunk, contexts[i], TaskCreationOptions.DenyChildAttach);
 		}
-		downloadDir(in delta.AcquisitionTree, Path.Combine(DownloadsDirectory!, state.Id.ToString()), 0);
+		downloadDir(in delta.AcquisitionTree, Path.Join(DownloadsDirectory!, state.Id.ToString()), 0);
 		foreach (var task in tasks)
 		{
 			if (task is null)
@@ -480,7 +480,7 @@ public class CDNClient
 					return;
 				}
 				var file = manifest.FileBuffer[acquisitonFile.Index];
-				var handle = File.OpenHandle(Path.Combine(path, file.Name), FileMode.Create, FileAccess.Write, preallocationSize: file.Size);
+				var handle = File.OpenHandle(Path.Join(path, file.Name), FileMode.Create, FileAccess.Write, preallocationSize: file.Size);
 				RandomAccess.SetLength(handle, file.Size);
 				handle.Dispose();
 				ProgressUpdated?.Invoke(++state.DisplayProgress);
@@ -489,7 +489,7 @@ public class CDNClient
 			for (; index < dir.Subdirectories.Count; index++)
 			{
 				var subdir = dir.Subdirectories[index];
-				preallocDir(in subdir, Path.Combine(path, manifest.DirectoryBuffer[subdir.Index].Name), recursionLevel + 1);
+				preallocDir(in subdir, Path.Join(path, manifest.DirectoryBuffer[subdir.Index].Name), recursionLevel + 1);
 				if (cancellationToken.IsCancellationRequested)
 				{
 					state.ProgressIndexStack[recursionLevel] = dir.Files.Count + index;
@@ -508,7 +508,7 @@ public class CDNClient
 		if (new DriveInfo(DownloadsDirectory!).AvailableFreeSpace < delta.DownloadCacheSize)
 			throw new SteamNotEnoughDiskSpaceException(delta.DownloadCacheSize);
 		ProgressInitiated?.Invoke(ProgressType.Numeric, delta.NumDownloadFiles, state.DisplayProgress);
-		preallocDir(in delta.AcquisitionTree, Path.Combine(DownloadsDirectory!, state.Id.ToString()), 0);
+		preallocDir(in delta.AcquisitionTree, Path.Join(DownloadsDirectory!, state.Id.ToString()), 0);
 		if (cancellationToken.IsCancellationRequested)
 		{
 			state.SaveToFile();
@@ -516,14 +516,14 @@ public class CDNClient
 		}
 		if (delta.ChunkBufferFileSize > 0)
 		{
-			var handle = File.OpenHandle(Path.Combine(DownloadsDirectory!, $"{state.Id}.scchunkbuffer"), FileMode.Create, FileAccess.Write, preallocationSize: delta.ChunkBufferFileSize);
+			var handle = File.OpenHandle(Path.Join(DownloadsDirectory!, $"{state.Id}.scchunkbuffer"), FileMode.Create, FileAccess.Write, preallocationSize: delta.ChunkBufferFileSize);
 			RandomAccess.SetLength(handle, delta.ChunkBufferFileSize);
 			handle.Dispose();
 			ProgressUpdated?.Invoke(++state.DisplayProgress);
 		}
 		if (delta.IntermediateFileSize > 0)
 		{
-			var handle = File.OpenHandle(Path.Combine(DownloadsDirectory!, $"{state.Id}.screlocpatchcache"), FileMode.Create, FileAccess.Write, preallocationSize: delta.IntermediateFileSize);
+			var handle = File.OpenHandle(Path.Join(DownloadsDirectory!, $"{state.Id}.screlocpatchcache"), FileMode.Create, FileAccess.Write, preallocationSize: delta.IntermediateFileSize);
 			RandomAccess.SetLength(handle, delta.IntermediateFileSize);
 			handle.Dispose();
 			ProgressUpdated?.Invoke(++state.DisplayProgress);
@@ -540,7 +540,7 @@ public class CDNClient
 	{
 		if (ManifestsDirectory is not null)
 		{
-			string filePath = Path.Combine(ManifestsDirectory, $"{item}-{manifestId}.scmanifest");
+			string filePath = Path.Join(ManifestsDirectory, $"{item}-{manifestId}.scmanifest");
 			if (File.Exists(filePath))
 			{
 				StatusUpdated?.Invoke(Status.LoadingManifest);
@@ -579,7 +579,7 @@ public class CDNClient
 				StatusUpdated?.Invoke(Status.LoadingManifest);
 				var result = new DepotManifest(buffer, item);
 				if (ManifestsDirectory is not null)
-					result.WriteToFile(Path.Combine(ManifestsDirectory, $"{item}-{manifestId}.scmanifest"));
+					result.WriteToFile(Path.Join(ManifestsDirectory, $"{item}-{manifestId}.scmanifest"));
 				return result;
 			}
 			catch (Exception e)
@@ -604,7 +604,7 @@ public class CDNClient
 	{
 		if (DownloadsDirectory is not null)
 		{
-			string filePath = Path.Combine(DownloadsDirectory, $"{item}-{sourceManifest.Id}-{targetManifest.Id}.scpatch");
+			string filePath = Path.Join(DownloadsDirectory, $"{item}-{sourceManifest.Id}-{targetManifest.Id}.scpatch");
 			if (File.Exists(filePath))
 			{
 				StatusUpdated?.Invoke(Status.LoadingPatch);
@@ -642,7 +642,7 @@ public class CDNClient
 				StatusUpdated?.Invoke(Status.LoadingPatch);
 				var result = new DepotPatch(buffer, item, sourceManifest, targetManifest);
 				if (DownloadsDirectory is not null)
-					result.WriteToFile(Path.Combine(DownloadsDirectory, $"{item}-{sourceManifest.Id}-{targetManifest.Id}.scpatch"));
+					result.WriteToFile(Path.Join(DownloadsDirectory, $"{item}-{sourceManifest.Id}-{targetManifest.Id}.scpatch"));
 				return result;
 			}
 			catch (Exception e)
