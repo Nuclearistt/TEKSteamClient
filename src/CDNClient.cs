@@ -743,6 +743,24 @@ public class CDNClient
 			return chunksLeft;
 		}
 	}
+	/// <summary>Context containing all the data needed to download a chunk.</summary>
+	private readonly struct ChunkContext
+	{
+		/// <summary>Size of LZMA-compressed chunk data.</summary>
+		public required int CompressedSize { get; init; }
+		/// <summary>Size of uncompressed chunk data.</summary>
+		public required int UncompressedSize { get; init; }
+		/// <summary>Adler checksum of chunk data.</summary>
+		public required uint Checksum { get; init; }
+		/// <summary>Offset of chunk data from the beginning of containing file.</summary>
+		public required long FileOffset { get; init; }
+		/// <summary>Path to the file to download chunk to.</summary>
+		public required string FilePath { get; init; }
+		/// <summary>Handle for the file to download chunk to.</summary>
+		public required LimitedUseFileHandle FileHandle { get; init; }
+		/// <summary>GID of the chunk.</summary>
+		public required SHA1Hash Gid { get; init; }
+	}
 	/// <summary>File handle wrapper that releases the handle after the last chunk has been written to the file.</summary>
 	/// <param name="fileHandle">File handle.</param>
 	/// <param name="numChunks">The number of chunks that will be written to the file.</param>
@@ -757,6 +775,224 @@ public class CDNClient
 		{
 			if (--ChunksLeft is 0)
 				Handle.Dispose();
+		}
+	}
+	/// <summary>Shared context for download threads.</summary>
+	private class DownloadContext
+	{
+		/// <summary>Initializes a download context for given delta and state and sets up index stack.</summary>
+		public DownloadContext(ItemState state, DepotManifest manifest, DepotDelta delta, string basePath, ProgressUpdatedHandler? handler)
+		{
+			_manifest = manifest;
+			_state = state;
+			static int getDirTreeDepth(in DirectoryEntry.AcquisitionEntry dir)
+			{
+				int maxChildDepth = 0;
+				foreach (var subdir in dir.Subdirectories)
+				{
+					int childDepth = getDirTreeDepth(in subdir);
+					if (childDepth > maxChildDepth)
+						maxChildDepth = childDepth;
+				}
+				return 1 + maxChildDepth;
+			}
+			int dirTreeDepth = getDirTreeDepth(in delta.AcquisitionTree);
+			_pathTree = new string[dirTreeDepth + 1];
+			_pathTree[0] = basePath;
+			_currentDirTree = new DirectoryEntry.AcquisitionEntry[dirTreeDepth];
+			_currentDirTree[0] = delta.AcquisitionTree;
+			var indexStack = state.ProgressIndexStack;
+			if (indexStack.Count is 0)
+			{
+				bool findFirstChunk(in DirectoryEntry.AcquisitionEntry dir)
+				{
+					var files = dir.Files;
+					for (int i = 0; i < files.Count; i++)
+					{
+						var file = files[i];
+						if (file.Chunks.Count > 0 || manifest.FileBuffer[file.Index].Chunks.Count > 0)
+						{
+							state.ProgressIndexStack.Add(i);
+							state.ProgressIndexStack.Add(0);
+							return true;
+						}
+					}
+					int stackIndex = state.ProgressIndexStack.Count;
+					state.ProgressIndexStack.Add(0);
+					var subdirs = dir.Subdirectories;
+					for (int i = 0; i < subdirs.Count; i++)
+						if (findFirstChunk(subdirs[i]))
+						{
+							state.ProgressIndexStack[stackIndex] = i;
+							return true;
+						}
+					state.ProgressIndexStack.RemoveAt(stackIndex);
+					return false;
+				}
+				findFirstChunk(in _currentDirTree[0]);
+			}
+			for (int i = 0; i < state.ProgressIndexStack.Count - 2; i++)
+			{
+				_currentDirTree[i + 1] = _currentDirTree[i].Subdirectories[state.ProgressIndexStack[i]];
+				_pathTree[i + 1] = manifest.DirectoryBuffer[_currentDirTree[i + 1].Index].Name;
+			}
+			_currentFile = _currentDirTree[state.ProgressIndexStack.Count - 2].Files[state.ProgressIndexStack[^2]];
+			_pathTree[state.ProgressIndexStack.Count - 1] = manifest.FileBuffer[_currentFile.Index].Name;
+			if (delta.ChunkBufferFileSize > 0)
+			{
+				_chunkBufferFilePath = Path.Join(basePath, $"{state.Id}.scchunkbuffer");
+				_chunkBufferFileHandle = new(File.OpenHandle(_chunkBufferFilePath, FileMode.OpenOrCreate, FileAccess.Write, FileShare.ReadWrite, options: FileOptions.RandomAccess | FileOptions.Asynchronous), int.MaxValue);
+			}
+			if (state.ProgressIndexStack[^1] > 0)
+			{
+				if (_currentFile.Chunks.Count is 0)
+				{
+					_currentFilePath = Path.Join(_pathTree);
+					_currentFileHandle = new(File.OpenHandle(_currentFilePath, FileMode.OpenOrCreate, FileAccess.Write, FileShare.ReadWrite, FileOptions.RandomAccess | FileOptions.Asynchronous),
+						(_currentFile.Chunks.Count is 0 ? manifest.FileBuffer[_currentFile.Index].Chunks.Count : _currentFile.Chunks.Count) - state.ProgressIndexStack[^1]);
+				}
+				else
+				{
+					_currentFilePath = _chunkBufferFilePath!;
+					_currentFileHandle = _chunkBufferFileHandle!;
+				}
+			}
+			_progressUpdatedHandler = handler;
+		}
+		/// <summary>Path to the currently selected file.</summary>
+		private string? _currentFilePath;
+		/// <summary>Entry for the currently selected file.</summary>
+		private FileEntry.AcquisitionEntry _currentFile;
+		/// <summary>Handle for the currently selected file.</summary>
+		private LimitedUseFileHandle? _currentFileHandle;
+		/// <summary>Path to the chunk buffer file.</summary>
+		private readonly string? _chunkBufferFilePath;
+		/// <summary>Array of directory and file names to compose path from.</summary>
+		private readonly string?[] _pathTree;
+		/// <summary>Path to the chunk buffer file.</summary>
+		private readonly DepotManifest _manifest;
+		/// <summary>Path to the chunk buffer file.</summary>
+		private readonly DirectoryEntry.AcquisitionEntry[] _currentDirTree;
+		/// <summary>Item state.</summary>
+		private readonly ItemState _state;
+		/// <summary>Handle for the chunk buffer file.</summary>
+		private readonly LimitedUseFileHandle? _chunkBufferFileHandle;
+		/// <summary>Called when progress value is updated.</summary>
+		private readonly ProgressUpdatedHandler? _progressUpdatedHandler;
+		/// <summary>Submits progress for the previous chunk, gets context for the next chunk or <see langword="default"/> if the are no more chunks and moves index stack to the next chunk.</summary>
+		public ChunkContext GetNextChunk(long previousChunkSize)
+		{
+			var indexStack = _state.ProgressIndexStack;
+			lock (this)
+			{
+				if (previousChunkSize > 0)
+				{
+					_state.DisplayProgress += previousChunkSize;
+					_progressUpdatedHandler?.Invoke(_state.DisplayProgress);
+				}
+				if (indexStack.Count is 0)
+					return default;
+				int chunkIndex = indexStack[^1];
+				if (chunkIndex is 0)
+				{
+					if (_currentFile.Chunks.Count is 0)
+					{
+						_currentFilePath = Path.Join(_pathTree);
+						_currentFileHandle = new(File.OpenHandle(_currentFilePath, FileMode.OpenOrCreate, FileAccess.Write, FileShare.ReadWrite, FileOptions.RandomAccess | FileOptions.Asynchronous), _manifest.FileBuffer[_currentFile.Index].Chunks.Count);
+					}
+					else
+					{
+						_currentFilePath = _chunkBufferFilePath!;
+						_currentFileHandle = _chunkBufferFileHandle!;
+					}
+				}
+				ChunkEntry chunk;
+				long chunkBufferOffset;
+				int numChunks;
+				if (_currentFile.Chunks.Count is 0)
+				{
+					var chunks = _manifest.FileBuffer[_currentFile.Index].Chunks;
+					chunk = chunks[chunkIndex];
+					chunkBufferOffset = -1;
+					numChunks = chunks.Count;
+				}
+				else
+				{
+					var acquisitionChunk = _currentFile.Chunks[chunkIndex];
+					chunk = _manifest.ChunkBuffer[acquisitionChunk.Index];
+					chunkBufferOffset = acquisitionChunk.Offset;
+					numChunks = _currentFile.Chunks.Count;
+				}
+				if (++chunkIndex == numChunks)
+				{
+					bool contextRestored = false;
+					int lastDirLevel = indexStack.Count - 2;
+					bool findNextChunk(in DirectoryEntry.AcquisitionEntry dir, int recursionLevel)
+					{
+						if (contextRestored || recursionLevel == lastDirLevel)
+						{
+							var files = dir.Files;
+							for (int i = contextRestored ? 0 : indexStack[recursionLevel] + 1; i < files.Count; i++)
+							{
+								var file = files[i];
+								if (file.Chunks.Count > 0 || _manifest.FileBuffer[file.Index].Chunks.Count > 0)
+								{
+									if (contextRestored)
+									{
+										indexStack.Add(i);
+										indexStack.Add(0);
+									}
+									else
+									{
+										indexStack[recursionLevel] = i;
+										indexStack[recursionLevel + 1] = 0;
+									}
+									return true;
+								}
+							}
+							if (!contextRestored)
+							{
+								indexStack.RemoveRange(recursionLevel, 2);
+								contextRestored = true;
+							}
+						}
+						if (contextRestored)
+							indexStack.Add(0);
+						var subdirs = dir.Subdirectories;
+						for (int i = contextRestored ? 0 : indexStack[recursionLevel]; i < subdirs.Count; i++)
+							if (findNextChunk(subdirs[i], recursionLevel + 1))
+							{
+								indexStack[recursionLevel] = i;
+								return true;
+							}
+						indexStack.RemoveAt(recursionLevel);
+						return false;
+					}
+					if (!findNextChunk(in _currentDirTree[0], 0))
+						indexStack.Clear();
+					for (int i = 0; i < indexStack.Count - 2; i++)
+					{
+						_currentDirTree[i + 1] = _currentDirTree[i].Subdirectories[indexStack[i]];
+						_pathTree[i + 1] = _manifest.DirectoryBuffer[_currentDirTree[i + 1].Index].Name;
+					}
+					_currentFile = _currentDirTree[indexStack.Count - 2].Files[indexStack[^2]];
+					_pathTree[indexStack.Count - 1] = _manifest.FileBuffer[_currentFile.Index].Name;
+					for (int i = indexStack.Count; i < _pathTree.Length; i++)
+						_pathTree[i] = null;
+				}
+				else
+					indexStack[^1] = chunkIndex;
+				return new()
+				{
+					CompressedSize = chunk.CompressedSize,
+					UncompressedSize = chunk.UncompressedSize,
+					Checksum = chunk.Checksum,
+					FileOffset = chunkBufferOffset >= 0 ? chunkBufferOffset : chunk.Offset,
+					FilePath = _currentFilePath!,
+					FileHandle = _currentFileHandle!,
+					Gid = chunk.Gid
+				};
+			}
 		}
 	}
 	/// <summary>Thread-safe wrapper for updating progress value.</summary>
