@@ -277,7 +277,10 @@ internal class WebSocketConnection
 				_socket.Dispose();
 				continue;
 			}
-			_thread = new Thread(ConnectionLoop);
+			_thread = new Thread(ConnectionLoop)
+			{
+				Name = "CM WebSocket Connection Thread"
+			};
 			_thread.Start();
 			return;
 		}

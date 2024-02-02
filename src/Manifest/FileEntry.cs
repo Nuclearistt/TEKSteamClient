@@ -29,7 +29,7 @@ public readonly struct FileEntry
 	/// <summary>Structure used in <see cref="DepotDelta"/> to store indexes of files and chunks that must be acquired.</summary>
 	internal readonly struct AcquisitionEntry
 	{
-		/// <summary>Index of the file entry in its parent directory.</summary>
+		/// <summary>Index of the file entry in <see cref="DepotManifest.FileBuffer"/>.</summary>
 		public required int Index { get; init; }
 		/// <summary>File's chunks that must be acquired. If empty, the whole file is acquired.</summary>
 		public required ArraySegment<ChunkEntry> Chunks { get; init; }
@@ -37,7 +37,7 @@ public readonly struct FileEntry
 		/// <param name="index">Index of the chunk in its file.</param>
 		public readonly struct ChunkEntry(int index)
 		{
-			/// <summary>Index of the chunk entry in its file.</summary>
+			/// <summary>Index of the chunk entry in <see cref="DepotManifest.ChunkBuffer"/>.</summary>
 			public int Index { get; } = index;
 			/// <summary>Offset of the chunk data from the beginning of chunk buffer file.</summary>
 			public long Offset { get; init; }
@@ -46,7 +46,7 @@ public readonly struct FileEntry
 	/// <summary>Structure used in <see cref="DepotDelta"/> to store auxiliary data like patched chunks and relocations.</summary>
 	internal readonly struct AuxiliaryEntry
 	{
-		/// <summary>Index of the file entry in its parent directory.</summary>
+		/// <summary>Index of the file entry in <see cref="DepotManifest.FileBuffer"/>.</summary>
 		public required int Index { get; init; }
 		/// <summary>File's chunk patch and relocation entries.</summary>
 		public ArraySegment<ITransferOperation> TransferOperations { get; init; }
@@ -55,7 +55,7 @@ public readonly struct FileEntry
 		/// <summary>Contains data that is needed to patch a chunk.</summary>
 		public class ChunkPatchEntry : ITransferOperation
 		{
-			/// <summary>Index of the target chunk in the file.</summary>
+			/// <summary>Index of target chunk entry in <see cref="DepotManifest.ChunkBuffer"/>.</summary>
 			public required int ChunkIndex { get; init; }
 			/// <summary>Index of the corresponding patch chunk.</summary>
 			public required int PatchChunkIndex { get; init; }
@@ -96,7 +96,7 @@ public readonly struct FileEntry
 			for (int i = 0; i < numChunks; i++)
 				Chunks.Add(new(buffer[offset++]));
 		}
-		/// <summary>Index of the file entry in its parent directory.</summary>
+		/// <summary>Index of the file entry in <see cref="DepotManifest.FileBuffer"/>.</summary>
 		public int Index { get; }
 		/// <summary>File's chunks that must be acquired. If empty, the whole file is acquired.</summary>
 		public List<AcquisitionEntry.ChunkEntry> Chunks { get; }
@@ -115,7 +115,7 @@ public readonly struct FileEntry
 	/// <param name="index">Index of the file entry in its parent directory.</param>
 	internal class AuxiliaryStaging(int index)
 	{
-		/// <summary>Index of the file entry in its parent directory.</summary>
+		/// <summary>Index of the file entry in <see cref="DepotManifest.FileBuffer"/>.</summary>
 		public int Index { get; } = index;
 		/// <summary>File's chunk patch entries.</summary>
 		public List<ChunkPatchEntry> ChunkPatches { get; } = [];
@@ -130,7 +130,7 @@ public readonly struct FileEntry
 		{
 			/// <summary>Indicates whether intermediate file needs to be used as a buffer to avoid overlapping further chunks.</summary>
 			public bool UseIntermediateFile { get; set; }
-			/// <summary>Index of the target chunk in the file.</summary>
+			/// <summary>Index of target chunk entry in <see cref="DepotManifest.ChunkBuffer"/>.</summary>
 			public required int ChunkIndex { get; init; }
 			/// <summary>Index of the corresponding patch chunk.</summary>
 			public required int PatchChunkIndex { get; init; }
@@ -138,7 +138,7 @@ public readonly struct FileEntry
 			public required long Size { get; init; }
 		}
 		/// <summary>Describes data that needs to be moved within the file.</summary>
-		public class RelocationEntry : ITransferOperation
+		public class RelocationEntry : ITransferOperation, IComparable<RelocationEntry>
 		{
 			/// <summary>Indicates whether intermediate file needs to be used as a buffer to avoid overlapping further relocations and chunk patches.</summary>
 			public bool UseIntermediateFile { get; set; }
@@ -148,6 +148,8 @@ public readonly struct FileEntry
 			public required long TargetOffset { get; init; }
 			/// <summary>Size of data bulk.</summary>
 			public required long Size { get; set; }
+			[MethodImpl(MethodImplOptions.AggressiveInlining)]
+			public int CompareTo(RelocationEntry? other) => other is null ? 1 : SourceOffset.CompareTo(other.SourceOffset);
 		}
 		/// <summary>Represents an operation that takes data from certain region of a file and writes data to another region of a file.</summary>
 		public class TransferOperation : IComparable<TransferOperation>
