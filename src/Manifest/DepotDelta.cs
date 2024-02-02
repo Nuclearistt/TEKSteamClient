@@ -47,7 +47,7 @@ internal class DepotDelta
 					}
 			}
 			foreach (var subdir in acquisitionDir.Subdirectories)
-				countAcq(dir.Subdirectories[subdir.Index], subdir);
+				countAcq(in manifest.DirectoryBuffer[subdir.Index], subdir);
 		}
 		countAcq(in manifest.Root, acquisitionTree);
 		ChunkBufferFileSize = chunkBufferFileSize;
