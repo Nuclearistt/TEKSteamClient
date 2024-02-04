@@ -4,6 +4,8 @@ using System.IO.Compression;
 using System.Net;
 using System.Net.Http.Json;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
+using System.Text;
 using TEKSteamClient.CM.Messages;
 using TEKSteamClient.CM.Messages.Bodies;
 
@@ -173,13 +175,152 @@ public partial class CMClient
 	}
 	/// <summary>Logs onto Steam network with given user's credentials.</summary>
 	/// <param name="accountName">Name of the account.</param>
+	/// <param name="token">On input, optional previously stored refresh token that may be used to avoid 2FA; On output, the same or new refresh token that may be saved for future use.</param>
 	/// <param name="password">Account password.</param>
-	/// <param name="authCode">Authentication code (sent to email).</param>
-	/// <param name="steamGuardCode">Steam Guard code.</param>
 	/// <exception cref="SteamException">Failed to get response message or to log on.</exception>
-	public void LogOn(string accountName, string password, [Optional]string? authCode, [Optional]string? steamGuardCode)
+	public void LogOn(string accountName, ref string? token, [Optional]string password)
 	{
-		_connection.Connect();
+		if (string.IsNullOrEmpty(token) && string.IsNullOrEmpty(password))
+			throw new ArgumentException($"{nameof(password)} must be specified when {nameof(token)} is not");
+		if (!_connection.IsConnected)
+			_connection.Connect();
+		if (string.IsNullOrEmpty(token))
+		{
+			ulong jobId = GlobalId.NextJobId;
+			var publicKeyMessage = new Message<RSAPublicKey>(MessageType.ServiceMethodNotAuthed)
+			{
+				Header = new()
+				{
+					SourceJobId = jobId,
+					TargetJobName = "Authentication.GetPasswordRSAPublicKey#1"
+				}
+			};
+			publicKeyMessage.Body.AccountName = accountName;
+			var publicKeyResponse = _connection.TransceiveMessage<RSAPublicKey, RSAPublicKeyResponse>(publicKeyMessage, MessageType.ServiceMethodResponse, jobId)
+				?? throw new SteamException(SteamException.ErrorType.CMLogOnFailed, -1);
+			using var rsa = RSA.Create(new RSAParameters
+			{
+				Modulus = Convert.FromHexString(publicKeyResponse.Body.Modulus),
+				Exponent = Convert.FromHexString(publicKeyResponse.Body.Exponent),
+			});
+			Span<byte> buffer = stackalloc byte[512];
+			int length = Encoding.UTF8.GetBytes(password, buffer[..256]);
+			length = rsa.Encrypt(buffer[..length], buffer[256..], RSAEncryptionPadding.Pkcs1);
+			jobId = GlobalId.NextJobId;
+			var beginAuthSessionMessage = new Message<BeginAuthSession>(MessageType.ServiceMethodNotAuthed)
+			{
+				Header = new()
+				{
+					SourceJobId = jobId,
+					TargetJobName = "Authentication.BeginAuthSessionViaCredentials#1"
+				}
+			};
+			beginAuthSessionMessage.Body.AccountName = accountName;
+			beginAuthSessionMessage.Body.EncryptedPassword = Convert.ToBase64String(buffer.Slice(256, length));
+			beginAuthSessionMessage.Body.EncryptionTimestamp = publicKeyResponse.Body.Timestamp;
+			beginAuthSessionMessage.Body.Persistence = 1;
+			beginAuthSessionMessage.Body.WebsiteId = "Client";
+			beginAuthSessionMessage.Body.DeviceDetails = new()
+			{
+				DeviceFriendlyName = "TEK Steam Client",
+				PlatformType = 1,
+				OsType = s_osType
+			};
+			var beginAuthSessionResponse = _connection.TransceiveMessage<BeginAuthSession, BeginAuthSessionResponse>(beginAuthSessionMessage, MessageType.ServiceMethodResponse, jobId)
+				?? throw new SteamException(SteamException.ErrorType.CMLogOnFailed, -2);
+			if (beginAuthSessionResponse.Body.AllowedConfirmations.Count is 0)
+				throw new SteamException(SteamException.ErrorType.CMLogOnFailed, -3);
+			var confirmationType = beginAuthSessionResponse.Body.AllowedConfirmations[0].ConfirmationType;
+			bool loop = false;
+			switch (confirmationType)
+			{
+				case 1:
+					break;
+				case 2:
+				case 3:
+				{
+					Console.Write($"Enter Steam Guard {(confirmationType is 2 ? "email" : "device")} code: ");
+					string code = Console.ReadLine()!;
+					jobId = GlobalId.NextJobId;
+					var submitMessage = new Message<SubmitGuardCode>(MessageType.ServiceMethodNotAuthed)
+					{
+						Header = new()
+						{
+							SourceJobId = jobId,
+							TargetJobName = "Authentication.UpdateAuthSessionWithSteamGuardCode#1"
+						}
+					};
+					submitMessage.Body.ClientId = beginAuthSessionResponse.Body.ClientId;
+					submitMessage.Body.SteamId = beginAuthSessionResponse.Body.SteamId;
+					submitMessage.Body.Code = code;
+					submitMessage.Body.CodeType = confirmationType;
+					var submitResponse = _connection.TransceiveMessage<SubmitGuardCode, Empty>(submitMessage, MessageType.ServiceMethodResponse, jobId)
+						?? throw new SteamException(SteamException.ErrorType.CMLogOnFailed, -4);
+					if (submitResponse.Header!.Result is not 1 or 29)
+						throw new SteamException(SteamException.ErrorType.CMLogOnFailed, -5);
+					break;
+				}
+				case 4:
+					Console.WriteLine("Waiting for confirmation on mobile app");
+					loop = true;
+					break;
+				default:
+					throw new NotImplementedException($"Confirmation type {confirmationType}");
+			}
+			if (loop)
+			{
+				ulong clientId = beginAuthSessionResponse.Body.ClientId;
+				for (;;)
+				{
+					jobId = GlobalId.NextJobId;
+					var pollMessage = new Message<PollAuthSession>(MessageType.ServiceMethodNotAuthed)
+					{
+						Header = new()
+						{
+							SourceJobId = jobId,
+							TargetJobName = "Authentication.PollAuthSessionStatus#1"
+						}
+					};
+					pollMessage.Body.ClientId = clientId;
+					pollMessage.Body.RequestId = beginAuthSessionResponse.Body.RequestId;
+					var pollResponse = _connection.TransceiveMessage<PollAuthSession, PollAuthSessionResponse>(pollMessage, MessageType.ServiceMethodResponse, jobId)
+						?? throw new SteamException(SteamException.ErrorType.CMLogOnFailed, -6);
+					if (pollResponse.Header!.Result is not 1)
+						throw new SteamException(SteamException.ErrorType.CMLogOnFailed, -7);
+					if (pollResponse.Body.RefreshToken.Length is 0)
+					{
+						if (pollResponse.Body.HasNewClientId)
+							clientId = pollResponse.Body.NewClientId;
+						continue;
+					}
+					accountName = pollResponse.Body.AccountName;
+					token = pollResponse.Body.RefreshToken;
+					break;
+				}
+			}
+			else
+			{
+				jobId = GlobalId.NextJobId;
+				var pollMessage = new Message<PollAuthSession>(MessageType.ServiceMethodNotAuthed)
+				{
+					Header = new()
+					{
+						SourceJobId = jobId,
+						TargetJobName = "Authentication.PollAuthSessionStatus#1"
+					}
+				};
+				pollMessage.Body.ClientId = beginAuthSessionResponse.Body.ClientId;
+				pollMessage.Body.RequestId = beginAuthSessionResponse.Body.RequestId;
+				var pollResponse = _connection.TransceiveMessage<PollAuthSession, PollAuthSessionResponse>(pollMessage, MessageType.ServiceMethodResponse, jobId)
+					?? throw new SteamException(SteamException.ErrorType.CMLogOnFailed, -6);
+				if (pollResponse.Header!.Result is not 1)
+					throw new SteamException(SteamException.ErrorType.CMLogOnFailed, -7);
+				if (pollResponse.Body.RefreshToken.Length is 0)
+					throw new SteamException(SteamException.ErrorType.CMLogOnFailed, -8);
+				accountName = pollResponse.Body.AccountName;
+				token = pollResponse.Body.RefreshToken;
+			}
+		}
 		var message = new Message<LogOn>(MessageType.LogOn)
 		{
 			Header = new()
@@ -192,12 +333,9 @@ public partial class CMClient
 		message.Body.CellId = CellId;
 		message.Body.ClientLanguage = "english";
 		message.Body.ClientOsType = s_osType;
+		message.Body.ShouldRememberPassword = true;
 		message.Body.AccountName = accountName;
-		message.Body.Password = password;
-		if (!string.IsNullOrEmpty(authCode))
-			message.Body.AuthCode = authCode;
-		if (!string.IsNullOrEmpty(steamGuardCode))
-			message.Body.SteamGuardCode = steamGuardCode;
+		message.Body.AccessToken = token;
 		int result = 0;
 		var response = _connection.TransceiveMessage<LogOn, LogOnResponse>(message, MessageType.LogOnResponse);
 		if (response is not null)
@@ -216,21 +354,20 @@ public partial class CMClient
 	/// <exception cref="SteamException">Failed to get response message or to log on.</exception>
 	public void LogOnAnonymous()
 	{
-		_connection.Connect();
+		if (!_connection.IsConnected)
+			_connection.Connect();
 		var message = new Message<LogOn>(MessageType.LogOn)
 		{
 			Header = new()
 			{
 				SessionId = 0,
-				SteamId = 0x110000100000000
+				SteamId = 0x1A0000000000000
 			}
 		};
 		message.Body.ProtocolVersion = 65580;
 		message.Body.CellId = CellId;
 		message.Body.ClientLanguage = "english";
 		message.Body.ClientOsType = s_osType;
-		message.Header.SessionId = 0;
-		message.Header.SteamId = 0x1A0000000000000;
 		int result = 0;
 		var response = _connection.TransceiveMessage<LogOn, LogOnResponse>(message, MessageType.LogOnResponse);
 		if (response is not null)

@@ -1,0 +1,9 @@
+syntax="proto3";
+
+package teksteamclient.cm.messages.bodies;
+option csharp_namespace = "TEKSteamClient.CM.Messages.Bodies";
+
+message Hello
+{
+	uint32 protocol_version = 1;
+}

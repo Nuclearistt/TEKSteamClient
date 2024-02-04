@@ -10,4 +10,5 @@ message MessageHeader
 	optional fixed64 source_job_id = 10;
 	optional fixed64 target_job_id = 11;
 	optional string target_job_name = 12;
+	optional int32 result = 13;
 }

@@ -1,0 +1,15 @@
+syntax="proto3";
+
+package teksteamclient.cm.messages.bodies;
+option csharp_namespace = "TEKSteamClient.CM.Messages.Bodies";
+
+message RSAPublicKey
+{
+	string account_name = 1;
+}
+message RSAPublicKeyResponse
+{
+	string modulus = 1;
+	string exponent = 2;
+	uint64 timestamp = 3;
+}

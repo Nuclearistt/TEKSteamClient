@@ -45,7 +45,9 @@ internal class WebSocketConnection
 	private readonly Timer _timer;
 	/// <summary>The list of cached CM server URLs.</summary>
 	internal static readonly Stack<Uri> ServerList = new(20);
-	/// <summary>Indicates whether client is currently logged onto a Steam CM server.</summary>
+	/// <summary>Indicates whether client is currently connected to a Steam CM server.</summary>
+	public bool IsConnected { get; private set; }
+	/// <summary>Indicates whether client is currently logged onto a Steam account.</summary>
 	public bool IsLoggedOn { get; private set; }
 	/// <summary>Processes all incoming data in a loop.</summary>
 	private void ConnectionLoop()
@@ -53,11 +55,10 @@ internal class WebSocketConnection
 		try
 		{
 			byte[] buffer = GC.AllocateUninitializedArray<byte>(0x20000); //128 kiB
-			_heartbeatInterval = 2500;
 			while (!_cts!.IsCancellationRequested)
 			{
 				var receiveTask = _socket!.ReceiveAsync(buffer, _cts.Token);
-				if (!receiveTask.Wait(_heartbeatInterval * 2 + 300, _cts.Token))
+				if (!receiveTask.Wait(_heartbeatInterval is 0 ? Timeout.Infinite : _heartbeatInterval + 300, _cts.Token))
 				{
 					_cts.Cancel();
 					if (_socket.State is WebSocketState.Open)
@@ -213,7 +214,7 @@ internal class WebSocketConnection
 			}
 			catch { }
 		}
-		IsLoggedOn = false;
+		IsConnected = IsLoggedOn = false;
 		_socket!.Dispose();
 		_cts!.Dispose();
 		_timer.Change(Timeout.Infinite, Timeout.Infinite);
@@ -277,10 +278,11 @@ internal class WebSocketConnection
 				_socket.Dispose();
 				continue;
 			}
-			_thread = new Thread(ConnectionLoop)
-			{
-				Name = "CM WebSocket Connection Thread"
-			};
+			var helloMessage = new Message<Hello>(MessageType.Hello);
+			helloMessage.Body.ProtocolVersion = 65580;
+			Send(helloMessage);
+			IsConnected = true;
+			_thread = new Thread(ConnectionLoop) { Name = "CM WebSocket Connection Thread" };
 			_thread.Start();
 			return;
 		}
