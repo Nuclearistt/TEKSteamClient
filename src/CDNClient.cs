@@ -15,7 +15,7 @@ namespace TEKSteamClient;
 public class CDNClient
 {
 	/// <summary>CDN server list.</summary>
-	private Uri[] _servers = [];
+	private string[] _servers = [];
 	/// <summary>HTTP client that downloads manifests and patches from the CDN.</summary>
 	private readonly HttpClient s_client = new() { DefaultRequestVersion = HttpVersion.Version20, Timeout = TimeSpan.FromSeconds(10) };
 	/// <summary>Decryption keys to use for decrypting depots' content.</summary>
@@ -50,9 +50,9 @@ public class CDNClient
 			}
 			return result;
 		});
-		_servers = new Uri[servers.Count];
+		_servers = new string[servers.Count];
 		for (int i = 0; i < servers.Count; i++)
-			_servers[i] = new(string.Concat("https://", servers[i].Host));
+			_servers[i] = servers[i].Host;
 	}
 	private static void DownloadThreadProcedure(object? arg)
 	{
@@ -62,8 +62,6 @@ public class CDNClient
 		aes.Key = DepotDecryptionKeys[context.SharedContext.DepotId];
 		var lzmaDecoder = new Utils.LZMA.Decoder();
 		var httpClient = context.SharedContext.HttpClients[context.Index];
-		var requestUri = new Uri($"depot/{context.SharedContext.DepotId}/chunk/0000000000000000000000000000000000000000", UriKind.Relative);
-		ref byte uriGid = ref Unsafe.As<char, byte>(ref MemoryMarshal.GetReference(requestUri.ToString().AsSpan()[^40..]));
 		var token = context.Cts.Token;
 		var downloadBuffer = new Memory<byte>(buffer, 0, 0x200000);
 		var bufferSpan = new Span<byte>(buffer);
@@ -82,9 +80,9 @@ public class CDNClient
 				if (context.ChunkContext.FilePath is null)
 					return;
 			}
-			Unsafe.CopyBlockUnaligned(ref uriGid, ref Unsafe.As<char, byte>(ref MemoryMarshal.GetReference(context.ChunkContext.Gid.ToString().AsSpan())), 80);
 			int compressedSize = context.ChunkContext.CompressedSize;
 			int uncompressedSize = context.ChunkContext.UncompressedSize;
+			var uri = new Uri(context.ChunkContext.Gid.ToString(), UriKind.Relative);
 			Exception? exception = null;
 			var dataSpan = (ReadOnlySpan<byte>)bufferSpan[16..compressedSize];
 			var uncompressedDataSpan = bufferSpan[..uncompressedSize];
@@ -95,7 +93,7 @@ public class CDNClient
 				try
 				{
 					//Download encrypted chunk data
-					var request = new HttpRequestMessage(HttpMethod.Get, requestUri) { Version = HttpVersion.Version20 };
+					var request = new HttpRequestMessage(HttpMethod.Get, uri) { Version = HttpVersion.Version20 };
 					using var response = httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, token).GetAwaiter().GetResult();
 					using var content = response.EnsureSuccessStatusCode().Content;
 					using var stream = content.ReadAsStream(token);
@@ -192,7 +190,7 @@ public class CDNClient
 		for (int i = 0; i < _servers.Length; i++)
 			sharedContext.HttpClients[i] = new()
 			{
-				BaseAddress = _servers[i],
+				BaseAddress = new($"https://{_servers[i]}/depot/{state.Id}/chunk/"),
 				DefaultRequestVersion = HttpVersion.Version20,
 				Timeout = TimeSpan.FromSeconds(10)
 			};
@@ -222,7 +220,7 @@ public class CDNClient
 		ProgressInitiated?.Invoke(ProgressType.Binary, delta.DownloadSize, state.DisplayProgress);
 		var threads = new Thread[contexts.Length];
 		for (int i = 0; i < threads.Length; i++)
-			threads[i] = new(DownloadThreadProcedure);
+			threads[i] = new(DownloadThreadProcedure) { Name = $"{state.Id} Download Thread {i}" };
 		for (int i = 0; i < threads.Length; i++)
 			threads[i].UnsafeStart(contexts[i]);
 		foreach (var thread in threads)
@@ -358,7 +356,7 @@ public class CDNClient
 		foreach (var server in _servers)
 			try
 			{
-				var request = new HttpRequestMessage(HttpMethod.Get, new Uri($"{server}depot/{item.DepotId}/manifest/{manifestId}/5/{requestCode}")) { Version = HttpVersion.Version20 };
+				var request = new HttpRequestMessage(HttpMethod.Get, new Uri($"https://{server}/depot/{item.DepotId}/manifest/{manifestId}/5/{requestCode}")) { Version = HttpVersion.Version20 };
 				using var response = s_client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken).Result.EnsureSuccessStatusCode();
 				uint? crc = uint.TryParse(response.Headers.TryGetValues("x-content-crc", out var headerValue) ? headerValue.FirstOrDefault() : null, out uint value) ? value : null;
 				using var content = response.Content;
@@ -421,7 +419,7 @@ public class CDNClient
 		foreach (var server in _servers)
 			try
 			{
-				var request = new HttpRequestMessage(HttpMethod.Get, new Uri($"{server}depot/{item.DepotId}/patch/{sourceManifest.Id}/{targetManifest.Id}")) { Version = HttpVersion.Version20 };
+				var request = new HttpRequestMessage(HttpMethod.Get, new Uri($"https://{server}/depot/{item.DepotId}/patch/{sourceManifest.Id}/{targetManifest.Id}")) { Version = HttpVersion.Version20 };
 				using var response = s_client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken).Result.EnsureSuccessStatusCode();
 				uint? crc = uint.TryParse(response.Headers.TryGetValues("x-content-crc", out var headerValue) ? headerValue.FirstOrDefault() : null, out uint value) ? value : null;
 				using var content = response.Content;
