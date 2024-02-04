@@ -300,7 +300,7 @@ internal class WebSocketConnection
 					_socket.CloseOutputAsync(WebSocketCloseStatus.EndpointUnavailable, null, default);
 			}
 		}
-		else if (_socket?.State is WebSocketState.Open)
+		if (_socket?.State is WebSocketState.Open)
 			_socket.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, null, _cts!.Token);
 		if (Thread.CurrentThread != _thread)
 			_thread?.Join();
