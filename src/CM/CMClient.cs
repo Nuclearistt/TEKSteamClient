@@ -363,6 +363,7 @@ public partial class CMClient
 			}
 		};
 		message.Body.Ids.AddRange(ids);
+		message.Body.IncludeChildren = true;
 		message.Body.IncludeMetadata = true;
 		var response = _connection.TransceiveMessage<Messages.Bodies.WorkshopItemDetails, WorkshopItemDetailsResponse>(message, MessageType.ServiceMethodResponse, jobId)
 			?? throw new SteamException(SteamException.ErrorType.CMFailedToGetWorkshopItemDetails);
@@ -370,7 +371,16 @@ public partial class CMClient
 		for (int i = 0; i < response.Body.Items.Count; i++)
 		{
 			var item = response.Body.Items[i];
-			result[i] = new(item.Result, item.AppId, DateTimeOffset.FromUnixTimeSeconds(item.LastUpdated).LocalDateTime, item.Id, item.ManifestId, item.Name, item.PreviewUrl);
+			ulong[]? children;
+			if (item.Children.Count is 0)
+				children = null;
+			else
+			{
+				children = new ulong[item.Children.Count];
+				for (int j = 0; j < children.Length; j++)
+					children[j] = item.Children[j].Id;
+			}
+			result[i] = new(item.Result, item.AppId, DateTimeOffset.FromUnixTimeSeconds(item.LastUpdated).LocalDateTime, item.Id, item.ManifestId, item.Name, item.PreviewUrl, children);
 		}
 		return result;
 	}
@@ -408,7 +418,7 @@ public partial class CMClient
 		for (int i = 0; i < response.Body.Items.Count; i++)
 		{
 			var item = response.Body.Items[i];
-			result[i] = new(item.Result, appId, DateTimeOffset.FromUnixTimeSeconds(item.LastUpdated).LocalDateTime, item.Id, item.ManifestId, item.Name, item.PreviewUrl);
+			result[i] = new(item.Result, appId, DateTimeOffset.FromUnixTimeSeconds(item.LastUpdated).LocalDateTime, item.Id, item.ManifestId, item.Name, item.PreviewUrl, null);
 		}
 		return result;
 	}

@@ -6,10 +6,15 @@ option csharp_namespace = "TEKSteamClient.CM.Messages.Bodies";
 message WorkshopItemDetails
 {
 	repeated fixed64 ids = 1;
-	bool include_metadata = 11;
+	optional bool include_children = 4;
+	optional bool include_metadata = 11;
 }
 message WorkshopItemDetailsResponse
 {
+	message ItemChild
+	{
+		uint64 id = 1;
+	}
 	message Item
 	{
 		optional int32 result = 1;
@@ -19,6 +24,7 @@ message WorkshopItemDetailsResponse
 		optional fixed64 manifest_id = 14;
 		optional string name = 16;
 		optional int64 last_updated = 20;
+		repeated ItemChild children = 53;
 	}
 	repeated Item items = 1;
 }
