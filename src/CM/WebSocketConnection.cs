@@ -65,7 +65,7 @@ internal class WebSocketConnection
 						_socket.CloseAsync(WebSocketCloseStatus.EndpointUnavailable, null, default).Wait(5000);
 					break;
 				}
-				var result = receiveTask.Result;
+				var result = receiveTask.GetAwaiter().GetResult();
 				if (result.MessageType is WebSocketMessageType.Close)
 				{
 					if (_socket.State is not WebSocketState.Closed or WebSocketState.Aborted)
@@ -321,7 +321,7 @@ internal class WebSocketConnection
 		};
 		lock (_callbacks)
 			_callbacks.Add(callback);
-		var result = Send(message) && callback.CompletionSource.Task.Wait(5000) ? (Message<TResponse>?)callback.CompletionSource.Task.Result : null;
+		var result = Send(message) && callback.CompletionSource.Task.Wait(5000) ? (Message<TResponse>?)callback.CompletionSource.Task.GetAwaiter().GetResult() : null;
 		lock (_callbacks)
 			_callbacks.Remove(callback);
 		return result;

@@ -357,7 +357,7 @@ public class CDNClient
 			try
 			{
 				var request = new HttpRequestMessage(HttpMethod.Get, new Uri($"https://{server}/depot/{item.DepotId}/manifest/{manifestId}/5/{requestCode}")) { Version = HttpVersion.Version20 };
-				using var response = s_client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken).Result.EnsureSuccessStatusCode();
+				using var response = s_client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken).GetAwaiter().GetResult().EnsureSuccessStatusCode();
 				uint? crc = uint.TryParse(response.Headers.TryGetValues("x-content-crc", out var headerValue) ? headerValue.FirstOrDefault() : null, out uint value) ? value : null;
 				using var content = response.Content;
 				int size = (int)(content.Headers.ContentLength ?? throw new NullReferenceException("Content-Length is missing"));
@@ -420,7 +420,7 @@ public class CDNClient
 			try
 			{
 				var request = new HttpRequestMessage(HttpMethod.Get, new Uri($"https://{server}/depot/{item.DepotId}/patch/{sourceManifest.Id}/{targetManifest.Id}")) { Version = HttpVersion.Version20 };
-				using var response = s_client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken).Result.EnsureSuccessStatusCode();
+				using var response = s_client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken).GetAwaiter().GetResult().EnsureSuccessStatusCode();
 				uint? crc = uint.TryParse(response.Headers.TryGetValues("x-content-crc", out var headerValue) ? headerValue.FirstOrDefault() : null, out uint value) ? value : null;
 				using var content = response.Content;
 				int size = (int)(content.Headers.ContentLength ?? throw new NullReferenceException("Content-Length is missing"));

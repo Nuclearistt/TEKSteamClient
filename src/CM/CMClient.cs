@@ -472,7 +472,7 @@ public partial class CMClient
 			try
 			{
 				var httpRequest = new HttpRequestMessage(HttpMethod.Get, new Uri($"{appId}/sha/{Convert.ToHexString(appInfo.Sha.Span)}.txt.gz")) { Version = HttpVersion.Version20 };
-				using var httpResponse = s_clientConfigClient.SendAsync(httpRequest, HttpCompletionOption.ResponseContentRead, CancellationToken.None).Result.EnsureSuccessStatusCode();
+				using var httpResponse = s_clientConfigClient.SendAsync(httpRequest, HttpCompletionOption.ResponseContentRead, CancellationToken.None).GetAwaiter().GetResult().EnsureSuccessStatusCode();
 				using var content = httpResponse.Content;
 				using var reader = new StreamReader(new GZipStream(content.ReadAsStream(), CompressionMode.Decompress));
 				entries = new VDFEntry(reader)["depots"]?.Children;
@@ -564,7 +564,7 @@ public partial class CMClient
 	{
 		string[]? serverList;
 		using (var httpClient = new HttpClient() { DefaultRequestVersion = HttpVersion.Version20 })
-			try { serverList = httpClient.GetFromJsonAsync($"https://api.steampowered.com/ISteamDirectory/GetCMList/v1?cellid={CellId}", JsonContext.Default.CMListResponse).Result?.Response?.ServerlistWebsockets; }
+			try { serverList = httpClient.GetFromJsonAsync($"https://api.steampowered.com/ISteamDirectory/GetCMList/v1?cellid={CellId}", JsonContext.Default.CMListResponse).GetAwaiter().GetResult()?.Response?.ServerlistWebsockets; }
 			catch { serverList = null; }
 		if (serverList is null)
 			return;
