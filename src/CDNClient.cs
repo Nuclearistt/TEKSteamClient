@@ -741,7 +741,10 @@ public class CDNClient
 						return false;
 					}
 					if (!findNextChunk(in _currentDirTree[0], 0))
+					{
 						indexStack.Clear();
+						return default;
+					}
 					for (int i = 0; i < indexStack.Count - 2; i++)
 					{
 						_currentDirTree[i + 1] = _currentDirTree[i].Subdirectories[indexStack[i]];
