@@ -190,7 +190,7 @@ public class CDNClient
 		for (int i = 0; i < _servers.Length; i++)
 			sharedContext.HttpClients[i] = new()
 			{
-				BaseAddress = new($"https://{_servers[i]}/depot/{state.Id}/chunk/"),
+				BaseAddress = new($"https://{_servers[i]}/depot/{state.Id.DepotId}/chunk/"),
 				DefaultRequestVersion = HttpVersion.Version20,
 				Timeout = TimeSpan.FromSeconds(10)
 			};

@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 	<PropertyGroup>
 		<TargetFramework>net8.0</TargetFramework>
-		<BaseVersion>1.4.1</BaseVersion>
+		<BaseVersion>1.4.2</BaseVersion>
 		<Version>$(BaseVersion)</Version>
 		<Version Condition="'$(GITHUB_RUN_NUMBER)' != ''">$(BaseVersion)-alpha.$(GITHUB_RUN_NUMBER)</Version>
 		<Authors>Nuclearist</Authors>
