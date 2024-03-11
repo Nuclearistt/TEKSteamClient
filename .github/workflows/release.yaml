@@ -28,7 +28,7 @@ jobs:
         name: 'TEKSteamClient.${{ github.event.release.name }}.nupkg'
         path: 'bin/Release/TEKSteamClient.${{ github.event.release.name }}.*upkg'
     - name: Upload to GitHub release
-      uses: softprops/action-gh-release@v1
+      uses: softprops/action-gh-release@v2
       with:
         files: 'bin/Release/TEKSteamClient.${{ github.event.release.name }}.*upkg'
     - name: Publish to NuGet
