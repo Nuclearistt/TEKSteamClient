@@ -1,6 +1,6 @@
 name: Build and upload snapshot package
 
-on: [push, pull_request]
+on: [push]
 
 jobs:
   build-package:
