@@ -100,21 +100,11 @@ public class CDNClient
 					int bytesRead;
 					using var cts = CancellationTokenSource.CreateLinkedTokenSource(token);
 					cts.CancelAfter(60000);
-					try
-					{
-						var task = stream.ReadAtLeastAsync(downloadBuffer, compressedSize, false, cts.Token);
-						if (task.IsCompletedSuccessfully)
-							bytesRead = task.GetAwaiter().GetResult();
-						else
-							bytesRead = task.AsTask().GetAwaiter().GetResult();
-					}
-					catch (OperationCanceledException oce)
-					{
-						if (oce.CancellationToken == token)
-							return;
-						exception = new TimeoutException();
-						continue;
-					}
+					var task = stream.ReadAtLeastAsync(downloadBuffer, compressedSize, false, cts.Token);
+					if (task.IsCompletedSuccessfully)
+						bytesRead = task.GetAwaiter().GetResult();
+					else
+						bytesRead = task.AsTask().GetAwaiter().GetResult();
 					if (bytesRead != compressedSize)
 					{
 						exception = new InvalidDataException($"Downloaded chunk data size doesn't match expected [URL: {httpClient.BaseAddress}/{request.RequestUri}]");
@@ -136,7 +126,12 @@ public class CDNClient
 					}
 					exception = null;
 				}
-				catch (OperationCanceledException) { return; }
+				catch (OperationCanceledException oce)
+				{
+					if (oce.CancellationToken == token)
+						return;
+					exception = oce;
+				}
 				catch (HttpRequestException hre) when (hre.StatusCode > HttpStatusCode.InternalServerError) 
 				{
 					if (fallbackServerIndex is 0)
@@ -533,13 +528,13 @@ public class CDNClient
 	private class LimitedUseFileHandle(SafeFileHandle fileHandle, int numChunks)
 	{
 		/// <summary>The number of chunks left to be written to the file.</summary>
-		public int ChunksLeft { get; private set; } = numChunks;
+		private int _chunksLeft = numChunks;
 		/// <summary>File handle.</summary>
 		public SafeFileHandle Handle { get; } = fileHandle;
 		/// <summary>Decrements the number of chunks left to write and releases the handle if it becomes zero.</summary>
 		public void Release()
 		{
-			if (--ChunksLeft is 0)
+			if (Interlocked.Decrement(ref _chunksLeft) is 0)
 				Handle.Dispose();
 		}
 	}
