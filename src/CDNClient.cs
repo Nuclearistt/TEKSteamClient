@@ -27,10 +27,10 @@ public class CDNClient
 	/// <summary>CM client used to get CDN server list and manifest request codes.</summary>
 	public required CM.CMClient CmClient { get; init; }
 	/// <summary>
-	/// Number of servers that clients will simultaneously use when downloading depot content. The default value is <code>Math.Max(Environment.ProcessorCount * 6, 50)</code>.
+	/// Number of servers that clients will simultaneously use when downloading depot content. The default value is <code>6 &lt;= (Environment.ProcessorCount * 4 / 5) &lt;= 15</code>
 	/// It is also the number of download threads, scale it accordingly to your network bandwidth and CPU capabilities.
 	/// </summary>
-	public static int NumDownloadServers { get; set; } = Math.Max(Environment.ProcessorCount * 6, 50);
+	public static int NumDownloadServers { get; set; } = Math.Max(Math.Min(Environment.ProcessorCount * 4 / 5, 15), 6);
 	/// <summary>Gets CDN server list if necessary.</summary>
 	private void CheckServerList()
 	{
