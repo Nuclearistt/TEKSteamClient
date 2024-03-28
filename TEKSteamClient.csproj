@@ -46,7 +46,7 @@
 	<ItemGroup>
 		<PackageReference Include="System.IO.Hashing" Version="8.0.0"/>
 		<PackageReference Include="Google.Protobuf" Version="3.26.0"/>
-		<PackageReference Include="Google.Protobuf.Tools" Version="3.26.0"/>
+		<PackageReference Include="Google.Protobuf.Tools" Version="3.26.1"/>
 	</ItemGroup>
 	<ItemGroup>
 		<None Include="README.md" Pack="True" PackagePath="/"/>
